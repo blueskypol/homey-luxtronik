@@ -160,6 +160,18 @@
             "nl": "Verwarming Retour"
           }
         },
+        "measure_temperature.heating_feedback_external": {
+          "title": {
+            "en": "Heating Return External",
+            "nl": "Verwarming Retour Extern"
+          }
+        },
+        "measure_temperature.heating_feedback_calculated": {
+          "title": {
+            "en": "Heating Return Calculated",
+            "nl": "Verwarming Retour Berekend"
+          }
+        },
         "meter_power.total": {
           "title": {
             "en": "Total Power Usage",
