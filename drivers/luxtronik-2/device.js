@@ -21,8 +21,16 @@ class LuxtronikDevice extends Device {
       await this.addCapability('measure_power.current');
     }
     if (this.hasCapability('meter_power.heat2') === false) {
-      this.log('mmeter_power.heat2 has not been added yet, adding...');
+      this.log('meter_power.heat2 has not been added yet, adding...');
       await this.addCapability('meter_power.heat2');
+    }
+    if (this.hasCapability('measure_temperature.heating_feedback_calculated') === false) {
+      this.log('measure_temperature.heating_feedback_calculated has not been added yet, adding...');
+      await this.addCapability('measure_temperature.heating_feedback_calculated');
+    }
+    if (this.hasCapability('measure_temperature.heating_feedback_external') === false) {
+      this.log('measure_temperature.heating_feedback_external has not been added yet, adding...');
+      await this.addCapability('measure_temperature.heating_feedback_external');
     }
 
     this.energyTotal = null;
@@ -49,6 +57,8 @@ class LuxtronikDevice extends Device {
     this.temperatureSourceOut = null;
     this.temperatureHeatingSupply = null;
     this.temperatureHeatingFeedback = null;
+    this.temperatureHeatingFeedbackExt = null;
+    this.temperatureHeatingFeedbackCalc = null;
 
     this.water = null;
 
@@ -175,6 +185,8 @@ class LuxtronikDevice extends Device {
       if (this.temperatureSourceOut !== null) await this.setCapabilityValue('measure_temperature.source_out', this.temperatureSourceOut / 10).catch(this.error);
       if (this.temperatureHeatingSupply !== null) await this.setCapabilityValue('measure_temperature.heating_supply', this.temperatureHeatingSupply / 10).catch(this.error);
       if (this.temperatureHeatingFeedback !== null) await this.setCapabilityValue('measure_temperature.heating_feedback', this.temperatureHeatingFeedback / 10).catch(this.error);
+      if (this.temperatureHeatingFeedbackExt !== null) await this.setCapabilityValue('measure_temperature.heating_feedback_external', this.temperatureHeatingFeedbackExt / 10).catch(this.error);
+      if (this.temperatureHeatingFeedbackCalc !== null) await this.setCapabilityValue('measure_temperature.heating_feedback_calculated', this.temperatureHeatingFeedbackCalc / 10).catch(this.error);
 
       if (this.water !== null) await this.setCapabilityValue('measure_water', this.water).catch(this.error);
 
@@ -357,6 +369,8 @@ class LuxtronikDevice extends Device {
                 this.temperatureSourceOut = (array_calculated[20]);
                 this.temperatureHeatingSupply = (array_calculated[10]);
                 this.temperatureHeatingFeedback = (array_calculated[11]);
+                this.temperatureHeatingFeedbackCalc = (array_calculated[12]);
+                this.temperatureHeatingFeedbackExt = (array_calculated[13]);
 
 
                 this.water = (array_calculated[173]);
