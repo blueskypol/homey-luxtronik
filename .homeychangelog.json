@@ -16,5 +16,8 @@
   },
   "1.0.5": {
     "en": "Added support for Second Heating Source"
+  },
+  "1.0.6": {
+    "en": "Added support for Heating Return External and Calculated"
   }
 }
