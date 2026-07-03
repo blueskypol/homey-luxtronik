@@ -5,18 +5,25 @@ small implementation step, not a broad cleanup.
 
 ## Current State
 
-- App code now has the first private write helper, but no automatic writes, UI,
-  or Homey Flow cards.
+- App code now has the first private write helper and one user-facing Homey
+  Flow action for setting the DHW target temperature.
 - Documentation now captures the verified read/write protocol and known
   parameter IDs.
 - The current Homey app already reads values from the Luxtronik controller.
-- The current Homey app does not have completed user-facing write support.
+- The current Homey app has limited user-facing write support for DHW target
+  temperature only.
 - The only verified initial write target for DHW boost is parameter `105`,
   `ID_Soll_BWS_akt`, DHW target temperature, unit `C/10`.
 - `drivers/luxtronik-2/device.js` now contains:
   - `writeParameter(index, rawValue)`, allowlisted to parameter `105` only.
+  - `setDhwTargetTemperature(value)`, validates `35-60 C`, converts Celsius to
+    raw `C/10` with `Math.round(value * 10)`, logs both values, and waits for
+    `writeParameter(105, rawValue)`.
   - `testWriteDhwTargetNoop()`, a developer-only helper that writes the current
     raw parameter `105` value back to the controller.
+- `drivers/luxtronik-2/driver.flow.compose.json` now contains one action card:
+  - `set_dhw_target_temperature`, "Set DHW target temperature".
+- `app.js` registers that action card and delegates to the selected device.
 
 ## Before Writing Code
 
@@ -62,17 +69,22 @@ Implemented behavior:
    - Read parameter `105` again.
    - Confirm the value did not unexpectedly change.
 
-3. After the no-op live test succeeds, implement temporary DHW target boost.
+3. Keep the first user-facing DHW action narrow.
+   - Flow card `set_dhw_target_temperature` writes parameter `105`.
+   - Valid range is initially `35-60 C`.
+   - Do not implement boost or restore behavior in this card.
+
+4. After more live testing succeeds, implement temporary DHW target boost.
    - Read/store current parameter `105`.
    - Write a higher user-provided target to parameter `105`.
    - Restore after a configured duration.
    - Add a guard so restore behavior is explicit if someone changed the target
      during the boost.
 
-4. Do not implement cooling target yet.
+5. Do not implement cooling target yet.
    - No writeable cooling target parameter has been verified.
 
-5. Cooling mode may be considered later using parameter `108` only after a
+6. Cooling mode may be considered later using parameter `108` only after a
    separate real-controller test.
    - `ID_Einst_BA_Kuehl_akt`
    - `0 = Off`
@@ -113,7 +125,8 @@ hex:     00 00 0B BA  00 00 00 69
 
 ## Do Not Do Yet
 
-- [ ] Do not add public Homey flow actions before a real-controller write test.
+- [ ] Do not add more public Homey flow actions before the current DHW target
+      action is validated on a real controller.
 - [ ] Do not write to `ID_Einst_Warmwasser_extra`; it is not verified writeable.
 - [ ] Do not write to guessed cooling target IDs.
 - [ ] Do not move the whole socket implementation into `lib/`.

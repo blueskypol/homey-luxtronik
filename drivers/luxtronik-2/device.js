@@ -336,6 +336,27 @@ class LuxtronikDevice extends Device {
     });
   }
 
+  async setDhwTargetTemperature(value) {
+    const temperature = Number(value);
+
+    if (!Number.isFinite(temperature)) {
+      throw new Error(`DHW target temperature must be a number, received '${value}'.`);
+    }
+
+    if (temperature < 35 || temperature > 60) {
+      throw new Error(`DHW target temperature ${temperature} °C is outside the allowed range of 35-60 °C.`);
+    }
+
+    const rawValue = Math.round(temperature * 10);
+
+    this.log('Luxtronik set DHW target temperature requested', {
+      temperature,
+      rawValue,
+    });
+
+    return this.writeParameter(105, rawValue);
+  }
+
   async testWriteDhwTargetNoop() {
     if (!Array.isArray(this.parametersArray) || this.parametersArray[105] === undefined) {
       throw new Error('Cannot run DHW no-op write test: current parameter 105 is not available. Wait for a successful parameter scan first.');
