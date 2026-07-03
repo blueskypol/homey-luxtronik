@@ -4,6 +4,19 @@ const { Device } = require('homey');
 const net = require("net");
 const LuxtronikOperationMode = require("../../includes/luxtronik_operationmode");
 
+const VERIFIED_LUXTRONIK_PARAMETERS = Object.freeze({
+  DHW_TARGET: Object.freeze({
+    name: 'DHW_TARGET',
+    index: 105,
+    luxtronikName: 'ID_Soll_BWS_akt',
+    unit: '°C/10',
+    minCelsius: 45,
+    maxCelsius: 60,
+    validationMinCelsius: 45,
+    validationMaxCelsius: 60,
+  }),
+});
+
 
 
 class LuxtronikDevice extends Device {
@@ -248,7 +261,7 @@ class LuxtronikDevice extends Device {
     const timeout = 5000;
     const host = this.getHost();
 
-    if (index !== 105) {
+    if (index !== VERIFIED_LUXTRONIK_PARAMETERS.DHW_TARGET.index) {
       return Promise.reject(new Error(`Refusing to write unsupported Luxtronik parameter ${index}`));
     }
 
@@ -258,6 +271,7 @@ class LuxtronikDevice extends Device {
 
     this.log('Luxtronik writeParameter request', {
       command,
+      parameterName: VERIFIED_LUXTRONIK_PARAMETERS.DHW_TARGET.name,
       index,
       rawValue,
     });
@@ -300,6 +314,7 @@ class LuxtronikDevice extends Device {
         const responseValue = receivedData.readInt32BE(4);
         const response = {
           command,
+          parameterName: VERIFIED_LUXTRONIK_PARAMETERS.DHW_TARGET.name,
           index,
           rawValue,
           responseCommand,
@@ -417,26 +432,33 @@ class LuxtronikDevice extends Device {
   }
 
   async setDhwTargetTemperature(value) {
+    const parameter = VERIFIED_LUXTRONIK_PARAMETERS.DHW_TARGET;
     const temperature = Number(value);
 
     if (!Number.isFinite(temperature)) {
       throw new Error(`DHW target temperature must be a number, received '${value}'.`);
     }
 
-    if (temperature < 35 || temperature > 60) {
-      throw new Error(`DHW target temperature ${temperature} °C is outside the allowed range of 35-60 °C.`);
+    if (temperature < parameter.validationMinCelsius || temperature > parameter.validationMaxCelsius) {
+      throw new Error(`DHW target temperature ${temperature} °C is outside the allowed range of ${parameter.validationMinCelsius}-${parameter.validationMaxCelsius} °C.`);
     }
 
     const rawValue = Math.round(temperature * 10);
 
     this.log('Luxtronik set DHW target temperature requested', {
+      parameterName: parameter.name,
+      parameterIndex: parameter.index,
+      luxtronikName: parameter.luxtronikName,
       temperature,
       rawValue,
     });
 
-    const writeResponse = await this.writeParameter(105, rawValue);
+    const writeResponse = await this.writeParameter(parameter.index, rawValue);
 
     this.log('Luxtronik set DHW target temperature write response', {
+      parameterName: parameter.name,
+      parameterIndex: parameter.index,
+      luxtronikName: parameter.luxtronikName,
       temperature,
       rawValue,
       writeResponse,
@@ -445,9 +467,12 @@ class LuxtronikDevice extends Device {
     await this.waitForWriteSettle(1500);
 
     const parameters = await this.readParameters();
-    const readBackValue = parameters[105];
+    const readBackValue = parameters[parameter.index];
 
     this.log('Luxtronik set DHW target temperature read-back', {
+      parameterName: parameter.name,
+      parameterIndex: parameter.index,
+      luxtronikName: parameter.luxtronikName,
       temperature,
       rawValue,
       writeResponse,
@@ -455,10 +480,13 @@ class LuxtronikDevice extends Device {
     });
 
     if (readBackValue !== rawValue) {
-      throw new Error(`DHW target read-back verification failed: expected raw value ${rawValue}, got ${readBackValue}.`);
+      throw new Error(`${parameter.name} read-back verification failed for parameter ${parameter.index}: expected raw value ${rawValue}, got ${readBackValue}.`);
     }
 
     this.log('Luxtronik set DHW target temperature verified', {
+      parameterName: parameter.name,
+      parameterIndex: parameter.index,
+      luxtronikName: parameter.luxtronikName,
       temperature,
       rawValue,
       writeResponse,
@@ -466,6 +494,9 @@ class LuxtronikDevice extends Device {
     });
 
     return {
+      parameterName: parameter.name,
+      parameterIndex: parameter.index,
+      luxtronikName: parameter.luxtronikName,
       temperature,
       rawValue,
       writeResponse,
@@ -474,22 +505,26 @@ class LuxtronikDevice extends Device {
   }
 
   async testWriteDhwTargetNoop() {
-    if (!Array.isArray(this.parametersArray) || this.parametersArray[105] === undefined) {
-      throw new Error('Cannot run DHW no-op write test: current parameter 105 is not available. Wait for a successful parameter scan first.');
+    const parameter = VERIFIED_LUXTRONIK_PARAMETERS.DHW_TARGET;
+
+    if (!Array.isArray(this.parametersArray) || this.parametersArray[parameter.index] === undefined) {
+      throw new Error(`Cannot run DHW no-op write test: current parameter ${parameter.index} (${parameter.name}) is not available. Wait for a successful parameter scan first.`);
     }
 
-    const currentRawValue = this.parametersArray[105];
+    const currentRawValue = this.parametersArray[parameter.index];
 
     if (!Number.isInteger(currentRawValue)) {
-      throw new Error(`Cannot run DHW no-op write test: current parameter 105 value '${currentRawValue}' is not an integer.`);
+      throw new Error(`Cannot run DHW no-op write test: current parameter ${parameter.index} (${parameter.name}) value '${currentRawValue}' is not an integer.`);
     }
 
     this.log('Luxtronik DHW target no-op write test starting', {
-      index: 105,
+      parameterName: parameter.name,
+      parameterIndex: parameter.index,
+      luxtronikName: parameter.luxtronikName,
       currentRawValue,
     });
 
-    const result = await this.writeParameter(105, currentRawValue);
+    const result = await this.writeParameter(parameter.index, currentRawValue);
 
     this.log('Luxtronik DHW target no-op write test completed', result);
 

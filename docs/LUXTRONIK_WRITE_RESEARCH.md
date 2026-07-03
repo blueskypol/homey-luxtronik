@@ -226,6 +226,11 @@ For now, only parameter `105` should be treated as ready for the first
 implementation step. Cooling is documented here as research, not as the next
 write target.
 
+The Homey implementation keeps verified writable parameters in a small local
+registry. The first entry is `DHW_TARGET` for parameter `105`,
+`ID_Soll_BWS_akt`, unit `°C/10`. The current Flow card validation uses the
+conservative range `45-60 °C`.
+
 ## Protocol Diagrams
 
 Read cycle currently used by Homey:
@@ -307,7 +312,7 @@ These are implementation notes only; no code has been changed.
 8. For Celsius values, convert Homey/display degrees C to raw controller value
    with `Math.round(celsius / 0.1)`, equivalent to `Math.round(celsius * 10)`.
 9. Add a small local allowlist for initial write parameters:
-   - `105` for DHW target
+   - `DHW_TARGET` / `105` for DHW target
    - `108` for cooling mode
    - optionally `110` only after the UI/behavior is clearly named as cooling
      release temperature, not "cooling target"

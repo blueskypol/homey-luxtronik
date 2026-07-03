@@ -15,8 +15,10 @@ small implementation step, not a broad cleanup.
 - The only verified initial write target for DHW boost is parameter `105`,
   `ID_Soll_BWS_akt`, DHW target temperature, unit `C/10`.
 - `drivers/luxtronik-2/device.js` now contains:
+  - `VERIFIED_LUXTRONIK_PARAMETERS.DHW_TARGET`, the named registry entry for
+    parameter `105` / `ID_Soll_BWS_akt`.
   - `writeParameter(index, rawValue)`, allowlisted to parameter `105` only.
-  - `setDhwTargetTemperature(value)`, validates `35-60 C`, converts Celsius to
+  - `setDhwTargetTemperature(value)`, validates `45-60 C`, converts Celsius to
     raw `C/10` with `Math.round(value * 10)`, logs both values, waits for
     `writeParameter(105, rawValue)`, then verifies parameter `105` by reading
     parameters back without running the full scan/capability update path.
@@ -75,7 +77,7 @@ Implemented behavior:
 
 3. Keep the first user-facing DHW action narrow.
    - Flow card `set_dhw_target_temperature` writes parameter `105`.
-   - Valid range is initially `35-60 C`.
+   - Active validation is `45-60 C`.
    - After writing, it waits briefly and verifies `parametersArray[105]` matches
      the requested raw value.
    - Do not implement boost or restore behavior in this card.
