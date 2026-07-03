@@ -16,6 +16,8 @@ Safety stance:
 - No protocol command or parameter may be guessed.
 - Every write must log command, parameter index, raw value sent, and controller
   response.
+- User-facing writes should verify success by reading the written parameter back
+  after the controller has had a short settle time.
 - Every real write action still needs testing against an actual controller.
 
 ## Sources Checked
@@ -257,6 +259,12 @@ Homey write action
         require response_command == 3002
         require response_value == parameter_index
         log command, index, raw value, response command, response value
+  |
+  +-- wait briefly after a successful write response
+  |
+  +-- read parameters with command 3003
+        require parameter_index value == raw_value
+        log requested value, write response, and read-back value
 ```
 
 Temporary DHW boost shape:
@@ -292,9 +300,13 @@ These are implementation notes only; no code has been changed.
    - raw value sent
    - controller response command
    - controller response value
-7. For Celsius values, convert Homey/display degrees C to raw controller value
+   - read-back value after verification
+7. After a successful user-facing write, wait briefly and read parameters with
+   command `3003`; only report success when the target parameter matches the
+   requested raw value.
+8. For Celsius values, convert Homey/display degrees C to raw controller value
    with `Math.round(celsius / 0.1)`, equivalent to `Math.round(celsius * 10)`.
-8. Add a small local allowlist for initial write parameters:
+9. Add a small local allowlist for initial write parameters:
    - `105` for DHW target
    - `108` for cooling mode
    - optionally `110` only after the UI/behavior is clearly named as cooling
@@ -351,7 +363,7 @@ Small verified steps:
    write a value equal to the current parameter value, log response, read back
    parameter `105`.
 4. Add a developer-only/manual DHW target write path for parameter `105`, with
-   explicit logs.
+   explicit logs and read-after-write verification.
 5. Add the real "temporary DHW boost" behavior:
    read original, write boosted target, restore after duration with a clear
    restore guard.

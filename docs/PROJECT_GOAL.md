@@ -2,97 +2,84 @@
 
 ## Overall Goal
 
-Evolve the existing Homey Luxtronik app so Homey automations can safely control
-an Alpha Innotec Luxtronik heat pump based on:
+Build a safe and reliable Homey integration for Luxtronik heat pumps.
 
-- PV surplus / excess solar production.
-- Dynamic electricity prices.
-- Future household energy strategy, such as preheating before expensive periods
-  or charging thermal mass instead of exporting solar power.
+The app should expose simple Homey Flow cards that let users optimise comfort,
+energy consumption and solar self-consumption without requiring knowledge of
+Luxtronik parameters.
 
-The first controlled write use cases are intentionally small:
+The project should evolve in small verified steps. Existing read functionality
+must never break, and write support must only be added for verified parameters.
 
-1. Boost domestic hot water by temporarily raising the DHW target temperature.
-2. Enable extra cooling, or adjust a cooling-related setting, only after the
-   exact parameter is verified.
+## Safety First
 
-This project is not currently about broad cleanup or refactoring. The app should
-evolve in small verified steps.
+The app should never try to outsmart or bypass the Luxtronik controller.
 
-## Current Hardware Setup
+Homey provides automation, timing and scheduling. Luxtronik remains responsible
+for protecting the heat pump, DHW tank and wider heating installation.
 
-Known:
+Default behaviour should always be conservative and safe. The app must not
+disable, replace or work around controller safety features. Legionella
+protection remains the responsibility of the Luxtronik controller and must never
+be disabled or replaced by Homey automation.
 
-- The target system is an Alpha Innotec heat pump using a Luxtronik controller.
-- The app communicates with the controller locally over LAN.
-- The current Homey app uses the Luxtronik config interface on TCP port `8889`.
+## Homey Owns The Automation
 
-Unknown / not documented yet:
+The app should expose building blocks, not business logic.
 
-- Exact heat pump model.
-- Exact Luxtronik firmware version.
-- Whether cooling is installed and enabled on the controller.
-- Current DHW target range and maximum safe DHW target on the real controller.
-- Whether Smart Home Interface / Modbus TCP is enabled. The current app does not
-  depend on it.
+Homey Flows, Advanced Flows and HomeyScript should contain the automation logic.
+The app itself should not implement timers, schedules, solar logic, weather
+logic or optimisation algorithms.
 
-## Current App Architecture
+Examples of suitable Flow cards:
 
-This is a Homey SDK v3 app.
+- Temporarily raise DHW target temperature.
+- Restore DHW target temperature.
+- Enable cooling.
+- Disable cooling.
+- Future: change heating target.
+
+## Safe Defaults
+
+Version 1 should use conservative limits.
+
+DHW target temperature should initially be limited to `45-60 °C`. These limits
+are chosen to avoid unsafe configurations while still allowing useful energy
+automation.
+
+The app should not allow arbitrary temperatures.
+
+## Future Device Awareness
+
+A future version may detect controller capabilities and supported value ranges.
+
+Possible improvements:
+
+- Detect available controller capabilities.
+- Detect supported minimum and maximum temperatures.
+- Adapt Flow card validation automatically.
+
+This should only be implemented after the limits are verified from the
+controller. Until then, conservative hard-coded limits are preferred.
+
+## Current Architecture
+
+This is a Homey SDK v3 app with three layers:
+
+1. Luxtronik TCP protocol.
+2. Homey device abstraction.
+3. Homey Flow cards.
 
 Important files:
 
-- `app.js`: minimal Homey app bootstrap.
+- `app.js`: Homey app bootstrap and Flow card registration.
 - `app.json`: generated Homey app manifest.
-- `.homeycompose/`: Homey Compose source for app metadata and custom capability.
-- `drivers/luxtronik-2/driver.js`: pairing flow and manual IP validation.
-- `drivers/luxtronik-2/device.js`: active device runtime and polling logic.
-- `includes/luxtronik_operationmode.js`: maps numeric operation mode values to
-  strings.
-- `lib/LuxtronikProtocol.js`: small read-protocol helper, currently not wired
-  into `device.js`.
-- `lib/LuxtronikClient.js`: experimental/unfinished client helper, currently
-  not wired into `device.js`.
-- `research/python-luxtronik/`: copied reference implementation used to verify
-  Luxtronik protocol details before adding write support.
-
-Current runtime flow:
-
-```text
-Homey pair flow
-  -> user enters device name and IP address
-  -> Homey stores IP in device setting `host`
-
-Homey device init
-  -> adds missing capabilities for existing users
-  -> starts scan loop
-
-scan loop
-  -> reads parameters command 3003
-  -> reads calculations command 3004
-  -> maps selected array indexes to Homey capabilities
-  -> schedules next scan
-```
-
-## Safety Rules
-
-- Existing read functionality must never break.
-- Do not refactor unrelated code.
-- Do not rewrite app architecture before the first safe write is proven.
-- Every write command must first be verified against `python-luxtronik`.
-- Never guess protocol commands.
-- Never guess parameter IDs.
-- Every write action must be tested against a real controller before exposing it
-  as a normal automation feature.
-- Every write must log:
-  - command
-  - parameter index
-  - value sent, in raw controller units
-  - controller response command
-  - controller response value
-- Writes must be serialized with reads so the controller never receives
-  overlapping socket operations from this app.
-- Start with an allowlist of known-safe parameter IDs.
+- `.homeycompose/`: Homey Compose app metadata.
+- `drivers/luxtronik-2/device.js`: active device runtime, polling and safe
+  write helpers.
+- `drivers/luxtronik-2/driver.flow.compose.json`: driver-scoped Flow cards.
+- `research/python-luxtronik/`: reference implementation used to verify
+  protocol details.
 
 ## Verified Starting Point
 
@@ -104,22 +91,12 @@ Verified from `python-luxtronik`:
 - Write parameters command: `3002`.
 - Parameter `105` is `ID_Soll_BWS_akt`.
 - `ID_Soll_BWS_akt` is the DHW target temperature.
-- Unit is `C/10`; for example `50.0 C` is raw value `500`.
+- Unit is `C/10`; for example `50.0 °C` is raw value `500`.
 - Python marks parameter `105` writeable.
 
-Not verified:
+Not verified yet:
 
 - Dedicated DHW boost command or flag.
-- Safe DHW target range for this real controller.
-- Cooling enable behavior on this real controller.
+- Controller-reported DHW target min/max range.
+- Cooling enable behaviour on this real controller.
 - Writeable cooling target parameter.
-
-## Next Session Checklist
-
-- [ ] Re-read `docs/LUXTRONIK_WRITE_RESEARCH.md`.
-- [ ] Re-read `docs/NEXT_STEPS.md`.
-- [ ] Confirm no application-code refactoring is needed for the next small step.
-- [ ] Implement only a minimal write helper and local fake test if write work is
-      resumed.
-- [ ] Do not expose a Homey flow action until a real-controller test confirms
-      the packet and response.

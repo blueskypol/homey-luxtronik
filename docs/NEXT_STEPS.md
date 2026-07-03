@@ -17,8 +17,11 @@ small implementation step, not a broad cleanup.
 - `drivers/luxtronik-2/device.js` now contains:
   - `writeParameter(index, rawValue)`, allowlisted to parameter `105` only.
   - `setDhwTargetTemperature(value)`, validates `35-60 C`, converts Celsius to
-    raw `C/10` with `Math.round(value * 10)`, logs both values, and waits for
-    `writeParameter(105, rawValue)`.
+    raw `C/10` with `Math.round(value * 10)`, logs both values, waits for
+    `writeParameter(105, rawValue)`, then verifies parameter `105` by reading
+    parameters back without running the full scan/capability update path.
+  - `readParameters()`, a small read-back helper for command `3003` that updates
+    `parametersArray` without updating Homey capabilities.
   - `testWriteDhwTargetNoop()`, a developer-only helper that writes the current
     raw parameter `105` value back to the controller.
 - `drivers/luxtronik-2/driver.flow.compose.json` now contains one action card:
@@ -50,7 +53,8 @@ Implemented behavior:
 - Requires `response_value === index`.
 - Logs command, index, raw value, and response.
 - Rejects on errors.
-- Is not called automatically.
+- User-facing DHW writes wait briefly after success, read parameter `105` back,
+  and reject if the read-back raw value does not match the requested raw value.
 
 ## Remaining Implementation Steps
 
@@ -72,6 +76,8 @@ Implemented behavior:
 3. Keep the first user-facing DHW action narrow.
    - Flow card `set_dhw_target_temperature` writes parameter `105`.
    - Valid range is initially `35-60 C`.
+   - After writing, it waits briefly and verifies `parametersArray[105]` matches
+     the requested raw value.
    - Do not implement boost or restore behavior in this card.
 
 4. After more live testing succeeds, implement temporary DHW target boost.

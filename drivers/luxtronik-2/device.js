@@ -336,6 +336,86 @@ class LuxtronikDevice extends Device {
     });
   }
 
+  readParameters() {
+    const command = 3003;
+    const port = 8889;
+    const timeout = 5000;
+    const host = this.getHost();
+
+    return new Promise((resolve, reject) => {
+      const socket = new net.Socket();
+      let receivedData = Buffer.alloc(0);
+      let settled = false;
+
+      const finish = (error, result) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        socket.destroy();
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(result);
+      };
+
+      socket.setTimeout(timeout);
+
+      socket.once('timeout', () => {
+        finish(new Error(`Luxtronik readParameters timed out after ${timeout}ms`));
+      });
+
+      socket.once('error', (error) => {
+        finish(error);
+      });
+
+      socket.on('data', (data) => {
+        receivedData = Buffer.concat([receivedData, data]);
+        if (receivedData.length < 8) {
+          return;
+        }
+
+        const responseCommand = receivedData.readInt32BE(0);
+        const length = receivedData.readInt32BE(4);
+        const expectedLength = 8 + length * 4;
+
+        if (receivedData.length < expectedLength) {
+          return;
+        }
+
+        if (responseCommand !== command) {
+          finish(new Error(`Luxtronik readParameters response command ${responseCommand} did not match ${command}`));
+          return;
+        }
+
+        const parameters = [];
+        let offset = 8;
+
+        for (let i = 0; i < length; i++) {
+          parameters.push(receivedData.readInt32BE(offset));
+          offset += 4;
+        }
+
+        this.parametersArray = parameters;
+        finish(null, parameters);
+      });
+
+      socket.connect(port, host, () => {
+        const request = Buffer.alloc(8);
+        request.writeInt32BE(command, 0);
+        request.writeInt32BE(0, 4);
+        socket.write(request);
+      });
+    });
+  }
+
+  waitForWriteSettle(timeout) {
+    return new Promise((resolve) => {
+      this.homey.setTimeout(resolve, timeout);
+    });
+  }
+
   async setDhwTargetTemperature(value) {
     const temperature = Number(value);
 
@@ -354,7 +434,43 @@ class LuxtronikDevice extends Device {
       rawValue,
     });
 
-    return this.writeParameter(105, rawValue);
+    const writeResponse = await this.writeParameter(105, rawValue);
+
+    this.log('Luxtronik set DHW target temperature write response', {
+      temperature,
+      rawValue,
+      writeResponse,
+    });
+
+    await this.waitForWriteSettle(1500);
+
+    const parameters = await this.readParameters();
+    const readBackValue = parameters[105];
+
+    this.log('Luxtronik set DHW target temperature read-back', {
+      temperature,
+      rawValue,
+      writeResponse,
+      readBackValue,
+    });
+
+    if (readBackValue !== rawValue) {
+      throw new Error(`DHW target read-back verification failed: expected raw value ${rawValue}, got ${readBackValue}.`);
+    }
+
+    this.log('Luxtronik set DHW target temperature verified', {
+      temperature,
+      rawValue,
+      writeResponse,
+      readBackValue,
+    });
+
+    return {
+      temperature,
+      rawValue,
+      writeResponse,
+      readBackValue,
+    };
   }
 
   async testWriteDhwTargetNoop() {
