@@ -242,6 +242,123 @@ class LuxtronikDevice extends Device {
     this.client.once('error', onceEndOrError);
   }
 
+  writeParameter(index, rawValue) {
+    const command = 3002;
+    const port = 8889;
+    const timeout = 5000;
+    const host = this.getHost();
+
+    if (index !== 105) {
+      return Promise.reject(new Error(`Refusing to write unsupported Luxtronik parameter ${index}`));
+    }
+
+    if (!Number.isInteger(rawValue)) {
+      return Promise.reject(new Error(`Refusing to write non-integer raw Luxtronik value ${rawValue}`));
+    }
+
+    this.log('Luxtronik writeParameter request', {
+      command,
+      index,
+      rawValue,
+    });
+
+    return new Promise((resolve, reject) => {
+      const socket = new net.Socket();
+      let receivedData = Buffer.alloc(0);
+      let settled = false;
+
+      const finish = (error, result) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        socket.destroy();
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(result);
+      };
+
+      socket.setTimeout(timeout);
+
+      socket.once('timeout', () => {
+        finish(new Error(`Luxtronik writeParameter timed out after ${timeout}ms`));
+      });
+
+      socket.once('error', (error) => {
+        finish(error);
+      });
+
+      socket.on('data', (data) => {
+        receivedData = Buffer.concat([receivedData, data]);
+        if (receivedData.length < 8) {
+          return;
+        }
+
+        const responseCommand = receivedData.readInt32BE(0);
+        const responseValue = receivedData.readInt32BE(4);
+        const response = {
+          command,
+          index,
+          rawValue,
+          responseCommand,
+          responseValue,
+        };
+
+        this.log('Luxtronik writeParameter response', response);
+
+        if (receivedData.length !== 8) {
+          finish(new Error(`Luxtronik writeParameter expected exactly 8 response bytes, received ${receivedData.length}`));
+          return;
+        }
+
+        if (responseCommand !== command) {
+          finish(new Error(`Luxtronik writeParameter response command ${responseCommand} did not match ${command}`));
+          return;
+        }
+
+        if (responseValue !== index) {
+          finish(new Error(`Luxtronik writeParameter response value ${responseValue} did not match parameter ${index}`));
+          return;
+        }
+
+        finish(null, response);
+      });
+
+      socket.connect(port, host, () => {
+        const request = Buffer.alloc(12);
+        request.writeInt32BE(command, 0);
+        request.writeInt32BE(index, 4);
+        request.writeInt32BE(rawValue, 8);
+        socket.write(request);
+      });
+    });
+  }
+
+  async testWriteDhwTargetNoop() {
+    if (!Array.isArray(this.parametersArray) || this.parametersArray[105] === undefined) {
+      throw new Error('Cannot run DHW no-op write test: current parameter 105 is not available. Wait for a successful parameter scan first.');
+    }
+
+    const currentRawValue = this.parametersArray[105];
+
+    if (!Number.isInteger(currentRawValue)) {
+      throw new Error(`Cannot run DHW no-op write test: current parameter 105 value '${currentRawValue}' is not an integer.`);
+    }
+
+    this.log('Luxtronik DHW target no-op write test starting', {
+      index: 105,
+      currentRawValue,
+    });
+
+    const result = await this.writeParameter(105, currentRawValue);
+
+    this.log('Luxtronik DHW target no-op write test completed', result);
+
+    return result;
+  }
+
 
   /**
    * Send Commands to Luxtronik Devices. 
