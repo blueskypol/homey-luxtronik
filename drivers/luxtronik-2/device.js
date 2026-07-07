@@ -17,6 +17,26 @@ const VERIFIED_LUXTRONIK_PARAMETERS = Object.freeze({
   }),
 });
 
+const COOLING_DIAGNOSTIC_FIELDS = Object.freeze({
+  COOLING_MODE: Object.freeze({
+    index: 108,
+    luxtronikName: 'ID_Einst_BA_Kuehl_akt',
+  }),
+  COOLING_RELEASE_TEMPERATURE: Object.freeze({
+    index: 110,
+    luxtronikName: 'ID_Einst_KuehlFreig_akt',
+  }),
+  COOLING_RELEASE_ACTIVE: Object.freeze({
+    index: 146,
+    luxtronikName: 'ID_WEB_FreigabKuehl',
+    source: 'calculation',
+  }),
+  OPERATION_MODE: Object.freeze({
+    index: 80,
+    source: 'calculation',
+  }),
+});
+
 
 
 class LuxtronikDevice extends Device {
@@ -562,6 +582,105 @@ class LuxtronikDevice extends Device {
     }
   }
 
+  decodeCoolingMode(value) {
+    switch (value) {
+      case 0:
+        return 'Off';
+      case 1:
+        return 'Automatic';
+      default:
+        return 'Unknown';
+    }
+  }
+
+  decodeCoolingStatus(value) {
+    switch (value) {
+      case 0:
+        return 'Off';
+      case 1:
+        return 'No demand';
+      case 2:
+        return 'Demand';
+      case 3:
+        return 'Active';
+      default:
+        return 'Unknown';
+    }
+  }
+
+  decodeOperationMode(value) {
+    switch (value) {
+      case 0:
+        return 'Heating';
+      case 1:
+        return 'Hot Water';
+      case 2:
+        return 'Swimming Pool/Solar';
+      case 3:
+        return 'EVU';
+      case 4:
+        return 'Defrost';
+      case 5:
+        return 'No Request';
+      case 6:
+        return 'Heating External';
+      case 7:
+        return 'Cooling';
+      default:
+        return 'Unknown';
+    }
+  }
+
+  formatEnumValue(value, decodedValue) {
+    if (value === undefined || value === null) {
+      return 'unavailable';
+    }
+
+    return `${value} (${decodedValue})`;
+  }
+
+  formatBooleanValue(value) {
+    if (value === undefined || value === null) {
+      return 'unavailable';
+    }
+
+    if (value === 0) {
+      return '0 (No)';
+    }
+
+    if (value === 1) {
+      return '1 (Yes)';
+    }
+
+    return `${value} (Unknown)`;
+  }
+
+  formatRawCelsius(value) {
+    if (value === undefined || value === null) {
+      return 'unavailable';
+    }
+
+    return `${value / 10} °C (raw ${value})`;
+  }
+
+  logCoolingStatus() {
+    const coolingMode = this.parametersArray?.[COOLING_DIAGNOSTIC_FIELDS.COOLING_MODE.index];
+    const coolingReleaseTemperature = this.parametersArray?.[COOLING_DIAGNOSTIC_FIELDS.COOLING_RELEASE_TEMPERATURE.index];
+    const coolingReleaseActive = this.calulationsArray?.[COOLING_DIAGNOSTIC_FIELDS.COOLING_RELEASE_ACTIVE.index];
+    const operationMode = this.calulationsArray?.[COOLING_DIAGNOSTIC_FIELDS.OPERATION_MODE.index];
+
+    this.log('================ COOLING STATUS ================');
+    this.log('Cooling configured     : unavailable (SHI input 205 is not read by current CFI polling)');
+    this.log(`Cooling mode           : ${this.formatEnumValue(coolingMode, this.decodeCoolingMode(coolingMode))}`);
+    this.log(`Cooling release temp   : ${this.formatRawCelsius(coolingReleaseTemperature)}`);
+    this.log(`Cooling release active : ${this.formatBooleanValue(coolingReleaseActive)} (calculation 146)`);
+    this.log(`Cooling status         : unavailable (SHI input 6 is not read by current CFI polling; values would be 0 Off, 1 No demand, 2 Demand, 3 Active)`);
+    this.log(`Operation mode         : ${this.formatEnumValue(operationMode, this.decodeOperationMode(operationMode))}`);
+    this.log('MC1 target             : unavailable (SHI input 141 is not read by current CFI polling)');
+    this.log(`Outdoor temperature    : ${this.formatRawCelsius(this.temperatureOutdoor)}`);
+    this.log('===============================================');
+  }
+
   scanDevice(host, port, timeout) {
     // This is just here if a client already existed
     this.destroyClient();
@@ -689,6 +808,7 @@ class LuxtronikDevice extends Device {
       try {
         await sendCommands(3003);
         await sendCommands(3004);
+        this.logCoolingStatus();
       } catch (error) {
         this.log("This happens almost never.")
       }

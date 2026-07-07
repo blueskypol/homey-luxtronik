@@ -12,6 +12,13 @@ small implementation step, not a broad cleanup.
 - The current Homey app already reads values from the Luxtronik controller.
 - The current Homey app has limited user-facing write support for DHW target
   temperature only.
+- The polling cycle now logs a read-only cooling diagnostics block after every
+  successful parameter/calculation scan.
+- Cooling diagnostics currently include CFI parameter `108`, CFI parameter
+  `110`, calculation `146`, operation mode and outdoor temperature.
+- SHI-only monitoring fields such as `cooling_status`, `cooling_configured`
+  and `mc1_target` are explicitly logged as unavailable because the current app
+  does not read SHI inputs yet.
 - The only verified initial write target for DHW boost is parameter `105`,
   `ID_Soll_BWS_akt`, DHW target temperature, unit `C/10`.
 - `drivers/luxtronik-2/device.js` now contains:
@@ -62,40 +69,26 @@ Implemented behavior:
 
 Phase 2 (Domestic Hot Water) is considered complete.
 
-The next milestone is Phase 3: Cooling Research.
+The next milestone is Phase 3: collect cooling behaviour during several hot
+days.
 
 Objectives:
 
-1. Create `docs/COOLING_RESEARCH.md`.
+1. Observe the cooling diagnostics log during idle, cooling-requested and
+   cooling-active conditions.
 
-2. Analyse the Python Luxtronik reference implementation for every cooling-related parameter.
+2. Compare CFI parameter `108` (Cooling Mode), CFI parameter `110` (Cooling
+   Release Temperature), calculation `146` (`ID_WEB_FreigabKuehl`), operation
+   mode and outdoor temperature.
 
-3. Classify each parameter as one of:
-   - cooling enable
-   - cooling mode
-   - cooling release temperature
-   - cooling target
-   - cooling curve
-   - cooling offset
-   - mixing circuit cooling
-   - unknown
+3. Record whether operation mode becomes `7 (Cooling)` when the controller is
+   actively cooling.
 
-4. For every parameter document:
-   - Luxtronik name
-   - parameter index
-   - type
-   - writable yes/no
-   - engineering unit
-   - possible values
-   - confidence level
+4. Decide whether a separate SHI input read path is needed for
+   `cooling_status`, `cooling_configured` and `mc1_target`.
 
-5. Identify the safest candidate parameters for live testing.
-
-6. No new Flow cards should be implemented until the research has been completed.
-
-7. The first expected live experiments are likely:
-   - parameter 108 (Cooling mode)
-   - parameter 110 (Cooling release temperature)
+5. Do not add cooling Flow cards until the observed controller behaviour has
+   been reviewed.
 
 The long-term objective is intelligent pre-cooling using Homey automation and PV surplus rather than forcing maximum cooling.
 
@@ -114,8 +107,8 @@ The long-term objective is intelligent pre-cooling using Homey automation and PV
 - [ ] Open `docs/PROJECT_GOAL.md`.
 - [ ] Open `docs/ROADMAP.md`.
 - [ ] Open `docs/LUXTRONIK_WRITE_RESEARCH.md`.
-- [ ] Create `docs/COOLING_RESEARCH.md`.
-- [ ] Analyse every cooling-related parameter from the Python implementation.
-- [ ] Document every candidate parameter.
-- [ ] Propose a safe order for real-controller testing.
+- [ ] Open `docs/COOLING_RESEARCH.md`.
+- [ ] Collect cooling behaviour during several hot days.
+- [ ] Review the read-only cooling diagnostic logs.
+- [ ] Decide whether SHI input monitoring should be implemented separately.
 - [ ] Do not write to the controller until the research has been reviewed.
