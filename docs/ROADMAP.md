@@ -70,28 +70,31 @@ Notes:
 
 Goal:
 
-Investigate how Luxtronik cooling can be controlled to increase cooling on hot,
-sunny days and use excess PV power.
+Enable intelligent pre-cooling for buildings with high thermal mass.
+
+The preferred strategy is not maximum cooling capacity, but using excess PV
+production to cool the building earlier, allowing the concrete floor and other
+building mass to store "coolth" before the hottest part of the day.
 
 Research:
 
-- identify all cooling-related writable parameters
-- determine whether cooling uses:
-  - enable/disable
-  - room temperature target
-  - cooling curve
-  - cooling offset
-  - supply temperature
-  - other mechanisms
-- test each verified writable parameter on a real controller
-- document the observed behaviour
+- identify every cooling-related parameter
+- classify each parameter
+- determine which parameters are writable
+- understand cooling enable/disable behaviour
+- understand cooling release temperature
+- determine whether a true cooling target exists
+- investigate cooling curves and offsets
+- determine whether MC (mixing circuit) targets are writable
+- test verified writable parameters on a real controller
+- document observed behaviour
 
 Deliverable:
 
-A documented cooling strategy that can later be exposed as simple Homey Flow
-cards.
+A documented cooling strategy describing how Homey can safely optimise cooling
+without bypassing Luxtronik safety logic.
 
-No user-facing implementation is planned until the research is complete.
+Only after the research is complete should new Flow cards be implemented.
 
 ---
 

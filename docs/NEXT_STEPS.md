@@ -60,94 +60,62 @@ Implemented behavior:
 
 ## Remaining Implementation Steps
 
-1. Add a tiny local test or script using a fake socket.
-   - Verify bytes for `[3002, 105, 500]`.
-   - Verify parsing `[3002, 105]`.
-   - Do not require a real controller for this first test.
+Phase 2 (Domestic Hot Water) is considered complete.
 
-2. Only after the fake/local test passes, do a live no-op write test when the
-   user is ready.
-   - Start the app on Homey.
-   - Wait for a successful parameter scan so `parametersArray[105]` exists.
-   - Manually call `testWriteDhwTargetNoop()` from a developer-only context.
-   - Confirm logs include command, index, raw value, response command, and
-     response value.
-   - Read parameter `105` again.
-   - Confirm the value did not unexpectedly change.
+The next milestone is Phase 3: Cooling Research.
 
-3. Keep the first user-facing DHW action narrow.
-   - Flow card `set_dhw_target_temperature` writes parameter `105`.
-   - Active validation is `45-60 C`.
-   - After writing, it waits briefly and verifies `parametersArray[105]` matches
-     the requested raw value.
-   - Do not implement boost or restore behavior in this card.
+Objectives:
 
-4. After more live testing succeeds, implement temporary DHW target boost.
-   - Read/store current parameter `105`.
-   - Write a higher user-provided target to parameter `105`.
-   - Restore after a configured duration.
-   - Add a guard so restore behavior is explicit if someone changed the target
-     during the boost.
+1. Create `docs/COOLING_RESEARCH.md`.
 
-5. Do not implement cooling target yet.
-   - No writeable cooling target parameter has been verified.
+2. Analyse the Python Luxtronik reference implementation for every cooling-related parameter.
 
-6. Cooling mode may be considered later using parameter `108` only after a
-   separate real-controller test.
-   - `ID_Einst_BA_Kuehl_akt`
-   - `0 = Off`
-   - `1 = Automatic`
+3. Classify each parameter as one of:
+   - cooling enable
+   - cooling mode
+   - cooling release temperature
+   - cooling target
+   - cooling curve
+   - cooling offset
+   - mixing circuit cooling
+   - unknown
 
-## Protocol Reminder
+4. For every parameter document:
+   - Luxtronik name
+   - parameter index
+   - type
+   - writable yes/no
+   - engineering unit
+   - possible values
+   - confidence level
 
-The write helper sends this verified packet:
+5. Identify the safest candidate parameters for live testing.
 
-   ```text
-   int32be command = 3002
-   int32be index
-   int32be raw_value
-   ```
+6. No new Flow cards should be implemented until the research has been completed.
 
-The helper reads exactly this verified response shape:
+7. The first expected live experiments are likely:
+   - parameter 108 (Cooling mode)
+   - parameter 110 (Cooling release temperature)
 
-   ```text
-   int32be response_command
-   int32be response_value
-   ```
-
-## Known Good Packet Examples
-
-Write DHW target parameter `105` to `50.0 C`:
-
-```text
-decimal: 3002, 105, 500
-hex:     00 00 0B BA  00 00 00 69  00 00 01 F4
-```
-
-Expected response shape:
-
-```text
-decimal: 3002, 105
-hex:     00 00 0B BA  00 00 00 69
-```
+The long-term objective is intelligent pre-cooling using Homey automation and PV surplus rather than forcing maximum cooling.
 
 ## Do Not Do Yet
 
-- [ ] Do not add more public Homey flow actions before the current DHW target
-      action is validated on a real controller.
-- [ ] Do not write to `ID_Einst_Warmwasser_extra`; it is not verified writeable.
-- [ ] Do not write to guessed cooling target IDs.
-- [ ] Do not move the whole socket implementation into `lib/`.
-- [ ] Do not fix broad lint issues as part of write support.
-- [ ] Do not change existing read capability mappings unless a write test proves
-      a direct conflict.
+- [ ] Do not implement new cooling Flow cards yet.
+- [ ] Do not write to any cooling parameter before it has been verified.
+- [ ] Do not guess cooling targets or offsets.
+- [ ] Do not refactor unrelated read logic.
+- [ ] Do not move the socket implementation into `lib/`.
+- [ ] Do not implement automatic cooling strategies before the controller behaviour is understood.
+
 
 ## Next Session Checklist
 
 - [ ] Open `docs/PROJECT_GOAL.md`.
+- [ ] Open `docs/ROADMAP.md`.
 - [ ] Open `docs/LUXTRONIK_WRITE_RESEARCH.md`.
-- [ ] Confirm the next task is local/fake verification of the private write
-      helper.
-- [ ] Add fake/local verification for packet bytes and response parsing.
-- [ ] Run the local verification.
-- [ ] Stop before live-controller testing unless explicitly requested.
+- [ ] Create `docs/COOLING_RESEARCH.md`.
+- [ ] Analyse every cooling-related parameter from the Python implementation.
+- [ ] Document every candidate parameter.
+- [ ] Propose a safe order for real-controller testing.
+- [ ] Do not write to the controller until the research has been reviewed.

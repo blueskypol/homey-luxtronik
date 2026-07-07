@@ -11,6 +11,21 @@ Luxtronik parameters.
 The project should evolve in small verified steps. Existing read functionality
 must never break, and write support must only be added for verified parameters.
 
+## Current Priority
+
+The current development focus is cooling research.
+
+The objective is to understand how Luxtronik cooling can safely be influenced
+from Homey.
+
+The preferred optimisation strategy is intelligent pre-cooling for buildings
+with high thermal mass using excess photovoltaic production.
+
+Research comes before implementation.
+
+No cooling Flow cards will be added until every cooling-related parameter has
+been verified on a real controller.
+
 ## Safety First
 
 The app should never try to outsmart or bypass the Luxtronik controller.
