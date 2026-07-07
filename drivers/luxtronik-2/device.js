@@ -99,6 +99,7 @@ class LuxtronikDevice extends Device {
 
     this.parametersArray = null;
     this.calulationsArray = null;
+    this.previousCoolingDiagnosticState = null;
 
     this.scan();
 
@@ -663,22 +664,99 @@ class LuxtronikDevice extends Device {
     return `${value / 10} °C (raw ${value})`;
   }
 
-  logCoolingStatus() {
-    const coolingMode = this.parametersArray?.[COOLING_DIAGNOSTIC_FIELDS.COOLING_MODE.index];
-    const coolingReleaseTemperature = this.parametersArray?.[COOLING_DIAGNOSTIC_FIELDS.COOLING_RELEASE_TEMPERATURE.index];
-    const coolingReleaseActive = this.calulationsArray?.[COOLING_DIAGNOSTIC_FIELDS.COOLING_RELEASE_ACTIVE.index];
-    const operationMode = this.calulationsArray?.[COOLING_DIAGNOSTIC_FIELDS.OPERATION_MODE.index];
+  formatDecodedEnum(value, decodedValue) {
+    if (value === undefined || value === null) {
+      return 'unavailable';
+    }
 
-    this.log('================ COOLING STATUS ================');
-    this.log('Cooling configured     : unavailable (SHI input 205 is not read by current CFI polling)');
-    this.log(`Cooling mode           : ${this.formatEnumValue(coolingMode, this.decodeCoolingMode(coolingMode))}`);
-    this.log(`Cooling release temp   : ${this.formatRawCelsius(coolingReleaseTemperature)}`);
-    this.log(`Cooling release active : ${this.formatBooleanValue(coolingReleaseActive)} (calculation 146)`);
-    this.log(`Cooling status         : unavailable (SHI input 6 is not read by current CFI polling; values would be 0 Off, 1 No demand, 2 Demand, 3 Active)`);
-    this.log(`Operation mode         : ${this.formatEnumValue(operationMode, this.decodeOperationMode(operationMode))}`);
-    this.log('MC1 target             : unavailable (SHI input 141 is not read by current CFI polling)');
-    this.log(`Outdoor temperature    : ${this.formatRawCelsius(this.temperatureOutdoor)}`);
-    this.log('===============================================');
+    return `${decodedValue} (${value})`;
+  }
+
+  getCoolingDiagnosticState() {
+    return {
+      coolingMode: this.parametersArray?.[COOLING_DIAGNOSTIC_FIELDS.COOLING_MODE.index],
+      coolingReleaseTemperature: this.parametersArray?.[COOLING_DIAGNOSTIC_FIELDS.COOLING_RELEASE_TEMPERATURE.index],
+      coolingReleaseActive: this.calulationsArray?.[COOLING_DIAGNOSTIC_FIELDS.COOLING_RELEASE_ACTIVE.index],
+      operationMode: this.calulationsArray?.[COOLING_DIAGNOSTIC_FIELDS.OPERATION_MODE.index],
+      outdoorTemperature: this.temperatureOutdoor,
+    };
+  }
+
+  hasCoolingDiagnosticChanges(previousState, currentState) {
+    return previousState.coolingMode !== currentState.coolingMode
+      || previousState.coolingReleaseTemperature !== currentState.coolingReleaseTemperature
+      || previousState.coolingReleaseActive !== currentState.coolingReleaseActive
+      || previousState.operationMode !== currentState.operationMode
+      || previousState.outdoorTemperature !== currentState.outdoorTemperature;
+  }
+
+  logCoolingChanges(previousState, currentState) {
+    if (!this.hasCoolingDiagnosticChanges(previousState, currentState)) {
+      return;
+    }
+
+    this.log('==================================================');
+    this.log('COOLING EVENT');
+    this.log('==================================================');
+
+    if (previousState.coolingMode !== currentState.coolingMode) {
+      this.log('');
+      this.log('Cooling mode changed');
+      this.log(`Old : ${this.formatDecodedEnum(previousState.coolingMode, this.decodeCoolingMode(previousState.coolingMode))}`);
+      this.log(`New : ${this.formatDecodedEnum(currentState.coolingMode, this.decodeCoolingMode(currentState.coolingMode))}`);
+    }
+
+    if (previousState.coolingReleaseTemperature !== currentState.coolingReleaseTemperature) {
+      this.log('');
+      this.log('Cooling release temperature changed');
+      this.log(`Old : ${this.formatRawCelsius(previousState.coolingReleaseTemperature)}`);
+      this.log(`New : ${this.formatRawCelsius(currentState.coolingReleaseTemperature)}`);
+    }
+
+    if (previousState.coolingReleaseActive !== currentState.coolingReleaseActive) {
+      this.log('');
+      if (currentState.coolingReleaseActive === 1) {
+        this.log('Cooling release became ACTIVE');
+        this.log(`Outdoor temperature : ${this.formatRawCelsius(currentState.outdoorTemperature)}`);
+        this.log(`Release temperature : ${this.formatRawCelsius(currentState.coolingReleaseTemperature)}`);
+      } else if (currentState.coolingReleaseActive === 0) {
+        this.log('Cooling release became INACTIVE');
+        this.log(`Outdoor temperature : ${this.formatRawCelsius(currentState.outdoorTemperature)}`);
+        this.log(`Release temperature : ${this.formatRawCelsius(currentState.coolingReleaseTemperature)}`);
+      } else {
+        this.log('Cooling release active changed');
+        this.log(`Old : ${this.formatBooleanValue(previousState.coolingReleaseActive)}`);
+        this.log(`New : ${this.formatBooleanValue(currentState.coolingReleaseActive)}`);
+      }
+    }
+
+    if (previousState.operationMode !== currentState.operationMode) {
+      this.log('');
+      this.log('Operation mode changed');
+      this.log(`Previous : ${this.formatDecodedEnum(previousState.operationMode, this.decodeOperationMode(previousState.operationMode))}`);
+      this.log(`Current  : ${this.formatDecodedEnum(currentState.operationMode, this.decodeOperationMode(currentState.operationMode))}`);
+    }
+
+    if (previousState.outdoorTemperature !== currentState.outdoorTemperature) {
+      this.log('');
+      this.log('Outdoor temperature changed');
+      this.log(`Old : ${this.formatRawCelsius(previousState.outdoorTemperature)}`);
+      this.log(`New : ${this.formatRawCelsius(currentState.outdoorTemperature)}`);
+    }
+
+    this.log('');
+    this.log(`Timestamp : ${new Date().toISOString()}`);
+    this.log('==================================================');
+  }
+
+  logCoolingStatus() {
+    const currentState = this.getCoolingDiagnosticState();
+
+    if (this.previousCoolingDiagnosticState !== null) {
+      this.logCoolingChanges(this.previousCoolingDiagnosticState, currentState);
+    }
+
+    this.previousCoolingDiagnosticState = currentState;
   }
 
   scanDevice(host, port, timeout) {

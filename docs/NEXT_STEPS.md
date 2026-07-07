@@ -12,8 +12,8 @@ small implementation step, not a broad cleanup.
 - The current Homey app already reads values from the Luxtronik controller.
 - The current Homey app has limited user-facing write support for DHW target
   temperature only.
-- The polling cycle now logs a read-only cooling diagnostics block after every
-  successful parameter/calculation scan.
+- The polling cycle now logs read-only cooling diagnostics only when one of the
+  tracked cooling values changes.
 - Cooling diagnostics currently include CFI parameter `108`, CFI parameter
   `110`, calculation `146`, operation mode and outdoor temperature.
 - SHI-only monitoring fields such as `cooling_status`, `cooling_configured`
@@ -69,8 +69,8 @@ Implemented behavior:
 
 Phase 2 (Domestic Hot Water) is considered complete.
 
-The next milestone is Phase 3: collect cooling behaviour during several hot
-days.
+The next milestone is Phase 3: observe cooling state transitions using
+event-based logging.
 
 Objectives:
 
@@ -108,7 +108,7 @@ The long-term objective is intelligent pre-cooling using Homey automation and PV
 - [ ] Open `docs/ROADMAP.md`.
 - [ ] Open `docs/LUXTRONIK_WRITE_RESEARCH.md`.
 - [ ] Open `docs/COOLING_RESEARCH.md`.
-- [ ] Collect cooling behaviour during several hot days.
+- [ ] Observe cooling state transitions using event-based logging.
 - [ ] Review the read-only cooling diagnostic logs.
 - [ ] Decide whether SHI input monitoring should be implemented separately.
 - [ ] Do not write to the controller until the research has been reviewed.
