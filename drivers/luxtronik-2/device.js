@@ -3,19 +3,18 @@
 const { Device } = require('homey');
 const net = require("net");
 const LuxtronikOperationMode = require("../../includes/luxtronik_operationmode");
+const {
+  COMMANDS,
+  createWriteParameterBuffer,
+  parseWriteParameterResponse,
+} = require('../../lib/LuxtronikProtocol');
+const {
+  VERIFIED_LUXTRONIK_PARAMETERS,
+  getWritableParameter,
+  validateTemperatureRawValue,
+} = require('../../lib/LuxtronikWriteSupport');
 
-const VERIFIED_LUXTRONIK_PARAMETERS = Object.freeze({
-  DHW_TARGET: Object.freeze({
-    name: 'DHW_TARGET',
-    index: 105,
-    luxtronikName: 'ID_Soll_BWS_akt',
-    unit: '°C/10',
-    minCelsius: 45,
-    maxCelsius: 60,
-    validationMinCelsius: 45,
-    validationMaxCelsius: 60,
-  }),
-});
+const COOLING_RELEASE_TEST_ORIGINAL_STORE_KEY = 'coolingReleaseTemperatureTestOriginalRaw';
 
 const COOLING_DIAGNOSTIC_FIELDS = Object.freeze({
   COOLING_MODE: Object.freeze({
@@ -100,6 +99,7 @@ class LuxtronikDevice extends Device {
     this.parametersArray = null;
     this.calulationsArray = null;
     this.previousCoolingDiagnosticState = null;
+    this.coolingReleaseTemperatureTestOriginalRaw = this.getStoreValue(COOLING_RELEASE_TEST_ORIGINAL_STORE_KEY);
 
     this.scan();
 
@@ -276,23 +276,26 @@ class LuxtronikDevice extends Device {
     this.client.once('error', onceEndOrError);
   }
 
-  writeParameter(index, rawValue) {
-    const command = 3002;
+  #writeParameterRaw(index, rawValue) {
+    const command = COMMANDS.WRITE_PARAMETER;
     const port = 8889;
     const timeout = 5000;
     const host = this.getHost();
 
-    if (index !== VERIFIED_LUXTRONIK_PARAMETERS.DHW_TARGET.index) {
+    const parameter = getWritableParameter(index);
+    if (!parameter) {
       return Promise.reject(new Error(`Refusing to write unsupported Luxtronik parameter ${index}`));
     }
 
-    if (!Number.isInteger(rawValue)) {
-      return Promise.reject(new Error(`Refusing to write non-integer raw Luxtronik value ${rawValue}`));
+    try {
+      validateTemperatureRawValue(parameter, rawValue);
+    } catch (error) {
+      return Promise.reject(error);
     }
 
     this.log('Luxtronik writeParameter request', {
       command,
-      parameterName: VERIFIED_LUXTRONIK_PARAMETERS.DHW_TARGET.name,
+      parameterName: parameter.name,
       index,
       rawValue,
     });
@@ -331,11 +334,18 @@ class LuxtronikDevice extends Device {
           return;
         }
 
-        const responseCommand = receivedData.readInt32BE(0);
-        const responseValue = receivedData.readInt32BE(4);
+        let parsedResponse;
+        try {
+          parsedResponse = parseWriteParameterResponse(receivedData);
+        } catch (error) {
+          finish(error);
+          return;
+        }
+        const responseCommand = parsedResponse.command;
+        const responseValue = parsedResponse.parameterIndex;
         const response = {
           command,
-          parameterName: VERIFIED_LUXTRONIK_PARAMETERS.DHW_TARGET.name,
+          parameterName: parameter.name,
           index,
           rawValue,
           responseCommand,
@@ -343,11 +353,6 @@ class LuxtronikDevice extends Device {
         };
 
         this.log('Luxtronik writeParameter response', response);
-
-        if (receivedData.length !== 8) {
-          finish(new Error(`Luxtronik writeParameter expected exactly 8 response bytes, received ${receivedData.length}`));
-          return;
-        }
 
         if (responseCommand !== command) {
           finish(new Error(`Luxtronik writeParameter response command ${responseCommand} did not match ${command}`));
@@ -363,13 +368,18 @@ class LuxtronikDevice extends Device {
       });
 
       socket.connect(port, host, () => {
-        const request = Buffer.alloc(12);
-        request.writeInt32BE(command, 0);
-        request.writeInt32BE(index, 4);
-        request.writeInt32BE(rawValue, 8);
-        socket.write(request);
+        socket.write(createWriteParameterBuffer(index, rawValue));
       });
     });
+  }
+
+  writeParameter(index, rawValue) {
+    const parameter = getWritableParameter(index);
+    if (!parameter) {
+      return Promise.reject(new Error(`Refusing to write unsupported Luxtronik parameter ${index}`));
+    }
+
+    return this.writeAndVerifyParameter(parameter, rawValue, `parameter ${index}`);
   }
 
   readParameters() {
@@ -474,35 +484,7 @@ class LuxtronikDevice extends Device {
       rawValue,
     });
 
-    const writeResponse = await this.writeParameter(parameter.index, rawValue);
-
-    this.log('Luxtronik set DHW target temperature write response', {
-      parameterName: parameter.name,
-      parameterIndex: parameter.index,
-      luxtronikName: parameter.luxtronikName,
-      temperature,
-      rawValue,
-      writeResponse,
-    });
-
-    await this.waitForWriteSettle(1500);
-
-    const parameters = await this.readParameters();
-    const readBackValue = parameters[parameter.index];
-
-    this.log('Luxtronik set DHW target temperature read-back', {
-      parameterName: parameter.name,
-      parameterIndex: parameter.index,
-      luxtronikName: parameter.luxtronikName,
-      temperature,
-      rawValue,
-      writeResponse,
-      readBackValue,
-    });
-
-    if (readBackValue !== rawValue) {
-      throw new Error(`${parameter.name} read-back verification failed for parameter ${parameter.index}: expected raw value ${rawValue}, got ${readBackValue}.`);
-    }
+    const result = await this.writeParameter(parameter.index, rawValue);
 
     this.log('Luxtronik set DHW target temperature verified', {
       parameterName: parameter.name,
@@ -510,8 +492,8 @@ class LuxtronikDevice extends Device {
       luxtronikName: parameter.luxtronikName,
       temperature,
       rawValue,
-      writeResponse,
-      readBackValue,
+      writeResponse: result.writeResponse,
+      readBackValue: result.readBackValue,
     });
 
     return {
@@ -520,8 +502,8 @@ class LuxtronikDevice extends Device {
       luxtronikName: parameter.luxtronikName,
       temperature,
       rawValue,
-      writeResponse,
-      readBackValue,
+      writeResponse: result.writeResponse,
+      readBackValue: result.readBackValue,
     };
   }
 
@@ -549,6 +531,85 @@ class LuxtronikDevice extends Device {
 
     this.log('Luxtronik DHW target no-op write test completed', result);
 
+    return result;
+  }
+
+  async writeAndVerifyParameter(parameter, rawValue, operation) {
+    validateTemperatureRawValue(parameter, rawValue);
+    this.log(`Luxtronik ${operation} write starting`, {
+      parameterName: parameter.name,
+      parameterIndex: parameter.index,
+      luxtronikName: parameter.luxtronikName,
+      rawValue,
+      temperature: rawValue / 10,
+    });
+
+    try {
+      const writeResponse = await this.#writeParameterRaw(parameter.index, rawValue);
+      await this.waitForWriteSettle(1500);
+      const parameters = await this.readParameters();
+      const readBackValue = parameters[parameter.index];
+
+      this.log(`Luxtronik ${operation} read-back`, {
+        parameterName: parameter.name,
+        parameterIndex: parameter.index,
+        rawValue,
+        writeResponse,
+        readBackValue,
+      });
+
+      if (readBackValue !== rawValue) {
+        throw new Error(`${parameter.name} read-back verification failed for parameter ${parameter.index}: expected raw value ${rawValue}, got ${readBackValue}.`);
+      }
+
+      return {
+        parameterName: parameter.name,
+        parameterIndex: parameter.index,
+        rawValue,
+        readBackValue,
+        writeResponse,
+      };
+    } catch (error) {
+      this.error(`Luxtronik ${operation} failed`, {
+        parameterName: parameter.name,
+        parameterIndex: parameter.index,
+        rawValue,
+        message: error.message,
+      });
+      throw error;
+    }
+  }
+
+  async testWriteCoolingReleaseTemperatureNoop() {
+    const parameter = VERIFIED_LUXTRONIK_PARAMETERS.COOLING_RELEASE_TEMPERATURE;
+    const parameters = await this.readParameters();
+    const currentRawValue = parameters[parameter.index];
+    validateTemperatureRawValue(parameter, currentRawValue);
+
+    await this.setStoreValue(COOLING_RELEASE_TEST_ORIGINAL_STORE_KEY, currentRawValue);
+    this.coolingReleaseTemperatureTestOriginalRaw = currentRawValue;
+    this.log('Luxtronik cooling release test original value saved', {
+      parameterIndex: parameter.index,
+      rawValue: currentRawValue,
+      temperature: currentRawValue / 10,
+    });
+
+    return this.writeParameter(parameter.index, currentRawValue);
+  }
+
+  async restoreCoolingReleaseTemperature() {
+    const parameter = VERIFIED_LUXTRONIK_PARAMETERS.COOLING_RELEASE_TEMPERATURE;
+    const originalRawValue = this.coolingReleaseTemperatureTestOriginalRaw
+      ?? this.getStoreValue(COOLING_RELEASE_TEST_ORIGINAL_STORE_KEY);
+
+    if (!Number.isInteger(originalRawValue)) {
+      throw new Error('Cannot restore cooling release temperature: no original test value has been saved.');
+    }
+
+    const result = await this.writeParameter(parameter.index, originalRawValue);
+    await this.unsetStoreValue(COOLING_RELEASE_TEST_ORIGINAL_STORE_KEY);
+    this.coolingReleaseTemperatureTestOriginalRaw = null;
+    this.log('Luxtronik cooling release original value restored', result);
     return result;
   }
 

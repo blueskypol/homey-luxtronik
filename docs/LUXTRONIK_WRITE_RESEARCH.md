@@ -335,9 +335,9 @@ No Homey flow action, capability listener, or completed write path was found.
 
 ## Remaining Unknowns
 
-- Real-controller response semantics beyond the Python fake socket are not yet
-  verified. Python expects/logs two int32 values after a write; fake tests return
-  `[3002, parameter_index]`.
+- Real-controller response semantics for parameter `110` are verified: command
+  `3002` returned parameter index `110`, followed by an exact parameter read-back.
+  Other writable parameters still require their own live verification.
 - Exact current hardware details are not yet documented beyond Alpha Innotec /
   Luxtronik over LAN.
 - Valid/safe value ranges for parameter `105` DHW target are not defined in the
@@ -349,9 +349,10 @@ No Homey flow action, capability listener, or completed write path was found.
   exists but is not writeable in python-luxtronik.
 - There is no verified writeable cooling target setpoint. The likely-looking
   target names found in python-luxtronik are not writeable/unknown.
-- Parameter `110` is verified writeable as a Celsius value, but its practical
-  behavior as "cooling release temperature" needs real-controller testing before
-  being exposed as an automation action.
+- Parameter `110` is live-verified as writable Celsius (`°C/10`). A reversible
+  `19.0 -> 20.0 -> 19.0 °C` test was visible on the physical controller and
+  ended with an exact raw `190` read-back. Homey UX still needs separate design
+  and review before this is exposed as an automation action.
 - Homey UX and flow-card design for temporary override duration, restore policy,
   and conflict handling is not yet specified.
 
