@@ -586,8 +586,7 @@ class LuxtronikDevice extends Device {
     const currentRawValue = parameters[parameter.index];
     validateTemperatureRawValue(parameter, currentRawValue);
 
-    await this.setStoreValue(COOLING_RELEASE_TEST_ORIGINAL_STORE_KEY, currentRawValue);
-    this.coolingReleaseTemperatureTestOriginalRaw = currentRawValue;
+    await this.saveCoolingReleaseTemperatureOriginal(currentRawValue);
     this.log('Luxtronik cooling release test original value saved', {
       parameterIndex: parameter.index,
       rawValue: currentRawValue,
@@ -595,6 +594,55 @@ class LuxtronikDevice extends Device {
     });
 
     return this.writeParameter(parameter.index, currentRawValue);
+  }
+
+  async saveCoolingReleaseTemperatureOriginal(currentRawValue) {
+    const savedRawValue = this.coolingReleaseTemperatureTestOriginalRaw
+      ?? this.getStoreValue(COOLING_RELEASE_TEST_ORIGINAL_STORE_KEY);
+
+    if (savedRawValue !== undefined && savedRawValue !== null) {
+      validateTemperatureRawValue(
+        VERIFIED_LUXTRONIK_PARAMETERS.COOLING_RELEASE_TEMPERATURE,
+        savedRawValue,
+      );
+      this.coolingReleaseTemperatureTestOriginalRaw = savedRawValue;
+      return savedRawValue;
+    }
+
+    await this.setStoreValue(COOLING_RELEASE_TEST_ORIGINAL_STORE_KEY, currentRawValue);
+    this.coolingReleaseTemperatureTestOriginalRaw = currentRawValue;
+    return currentRawValue;
+  }
+
+  async setCoolingReleaseTemperature(value) {
+    const parameter = VERIFIED_LUXTRONIK_PARAMETERS.COOLING_RELEASE_TEMPERATURE;
+    const temperature = Number(value);
+
+    if (!Number.isFinite(temperature)) {
+      throw new Error(`Cooling release temperature must be a number, received '${value}'.`);
+    }
+    if (!Number.isInteger(temperature * 2)) {
+      throw new Error(`Cooling release temperature ${temperature} °C must use 0.5 °C increments.`);
+    }
+
+    const rawValue = temperature * 10;
+    validateTemperatureRawValue(parameter, rawValue);
+
+    const parameters = await this.readParameters();
+    const currentRawValue = parameters[parameter.index];
+    validateTemperatureRawValue(parameter, currentRawValue);
+    const originalRawValue = await this.saveCoolingReleaseTemperatureOriginal(currentRawValue);
+
+    this.log('Luxtronik set cooling release temperature requested', {
+      parameterIndex: parameter.index,
+      luxtronikName: parameter.luxtronikName,
+      originalRawValue,
+      currentRawValue,
+      rawValue,
+      temperature,
+    });
+
+    return this.writeParameter(parameter.index, rawValue);
   }
 
   async restoreCoolingReleaseTemperature() {

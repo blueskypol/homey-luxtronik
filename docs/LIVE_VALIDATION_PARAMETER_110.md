@@ -52,3 +52,18 @@ survives an app restart, so the explicit restore remains available afterwards.
 
 The no-op test does not change the effective setting. Any future live write still
 requires separate explicit permission and must use read-back verification.
+
+## Homey Flow actions
+
+After live validation, two manual Flow actions were added:
+
+- **Set cooling release temperature** accepts `10-35 °C` in `0.5 °C` steps.
+  It is explicitly labelled as a release threshold, not a room target. Before
+  the first change it reads and persistently stores the controller value. Every
+  write requires an exact read-back.
+- **Restore original cooling release temperature** writes the first stored value
+  back and removes it only after an exact read-back succeeds.
+
+Repeated set actions preserve the first saved value, so restore returns to the
+setting from before the sequence rather than to the most recent intermediate
+value. No timer or automatic cooling strategy is implemented.
