@@ -71,6 +71,37 @@
           }
         ]
       }
+    ],
+    "actions": [
+      {
+        "id": "set_dhw_target_temperature",
+        "title": {
+          "en": "Set DHW target temperature",
+          "nl": "Stel tapwater doeltemperatuur in"
+        },
+        "titleFormatted": {
+          "en": "Set DHW target temperature to [[temperature]] °C",
+          "nl": "Stel tapwater doeltemperatuur in op [[temperature]] °C"
+        },
+        "args": [
+          {
+            "type": "device",
+            "name": "device",
+            "filter": "driver_id=luxtronik-2"
+          },
+          {
+            "type": "number",
+            "name": "temperature",
+            "title": {
+              "en": "Temperature",
+              "nl": "Temperatuur"
+            },
+            "min": 45,
+            "max": 60,
+            "step": 0.5
+          }
+        ]
+      }
     ]
   },
   "drivers": [

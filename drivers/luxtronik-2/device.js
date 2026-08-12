@@ -3,6 +3,38 @@
 const { Device } = require('homey');
 const net = require("net");
 const LuxtronikOperationMode = require("../../includes/luxtronik_operationmode");
+const {
+  COMMANDS,
+  createWriteParameterBuffer,
+  parseWriteParameterResponse,
+} = require('../../lib/LuxtronikProtocol');
+const {
+  VERIFIED_LUXTRONIK_PARAMETERS,
+  getWritableParameter,
+  validateTemperatureRawValue,
+} = require('../../lib/LuxtronikWriteSupport');
+
+const COOLING_RELEASE_TEST_ORIGINAL_STORE_KEY = 'coolingReleaseTemperatureTestOriginalRaw';
+
+const COOLING_DIAGNOSTIC_FIELDS = Object.freeze({
+  COOLING_MODE: Object.freeze({
+    index: 108,
+    luxtronikName: 'ID_Einst_BA_Kuehl_akt',
+  }),
+  COOLING_RELEASE_TEMPERATURE: Object.freeze({
+    index: 110,
+    luxtronikName: 'ID_Einst_KuehlFreig_akt',
+  }),
+  COOLING_RELEASE_ACTIVE: Object.freeze({
+    index: 146,
+    luxtronikName: 'ID_WEB_FreigabKuehl',
+    source: 'calculation',
+  }),
+  OPERATION_MODE: Object.freeze({
+    index: 80,
+    source: 'calculation',
+  }),
+});
 
 
 
@@ -66,6 +98,8 @@ class LuxtronikDevice extends Device {
 
     this.parametersArray = null;
     this.calulationsArray = null;
+    this.previousCoolingDiagnosticState = null;
+    this.coolingReleaseTemperatureTestOriginalRaw = this.getStoreValue(COOLING_RELEASE_TEST_ORIGINAL_STORE_KEY);
 
     this.scan();
 
@@ -242,6 +276,343 @@ class LuxtronikDevice extends Device {
     this.client.once('error', onceEndOrError);
   }
 
+  #writeParameterRaw(index, rawValue) {
+    const command = COMMANDS.WRITE_PARAMETER;
+    const port = 8889;
+    const timeout = 5000;
+    const host = this.getHost();
+
+    const parameter = getWritableParameter(index);
+    if (!parameter) {
+      return Promise.reject(new Error(`Refusing to write unsupported Luxtronik parameter ${index}`));
+    }
+
+    try {
+      validateTemperatureRawValue(parameter, rawValue);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+
+    this.log('Luxtronik writeParameter request', {
+      command,
+      parameterName: parameter.name,
+      index,
+      rawValue,
+    });
+
+    return new Promise((resolve, reject) => {
+      const socket = new net.Socket();
+      let receivedData = Buffer.alloc(0);
+      let settled = false;
+
+      const finish = (error, result) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        socket.destroy();
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(result);
+      };
+
+      socket.setTimeout(timeout);
+
+      socket.once('timeout', () => {
+        finish(new Error(`Luxtronik writeParameter timed out after ${timeout}ms`));
+      });
+
+      socket.once('error', (error) => {
+        finish(error);
+      });
+
+      socket.on('data', (data) => {
+        receivedData = Buffer.concat([receivedData, data]);
+        if (receivedData.length < 8) {
+          return;
+        }
+
+        let parsedResponse;
+        try {
+          parsedResponse = parseWriteParameterResponse(receivedData);
+        } catch (error) {
+          finish(error);
+          return;
+        }
+        const responseCommand = parsedResponse.command;
+        const responseValue = parsedResponse.parameterIndex;
+        const response = {
+          command,
+          parameterName: parameter.name,
+          index,
+          rawValue,
+          responseCommand,
+          responseValue,
+        };
+
+        this.log('Luxtronik writeParameter response', response);
+
+        if (responseCommand !== command) {
+          finish(new Error(`Luxtronik writeParameter response command ${responseCommand} did not match ${command}`));
+          return;
+        }
+
+        if (responseValue !== index) {
+          finish(new Error(`Luxtronik writeParameter response value ${responseValue} did not match parameter ${index}`));
+          return;
+        }
+
+        finish(null, response);
+      });
+
+      socket.connect(port, host, () => {
+        socket.write(createWriteParameterBuffer(index, rawValue));
+      });
+    });
+  }
+
+  writeParameter(index, rawValue) {
+    const parameter = getWritableParameter(index);
+    if (!parameter) {
+      return Promise.reject(new Error(`Refusing to write unsupported Luxtronik parameter ${index}`));
+    }
+
+    return this.writeAndVerifyParameter(parameter, rawValue, `parameter ${index}`);
+  }
+
+  readParameters() {
+    const command = 3003;
+    const port = 8889;
+    const timeout = 5000;
+    const host = this.getHost();
+
+    return new Promise((resolve, reject) => {
+      const socket = new net.Socket();
+      let receivedData = Buffer.alloc(0);
+      let settled = false;
+
+      const finish = (error, result) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        socket.destroy();
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(result);
+      };
+
+      socket.setTimeout(timeout);
+
+      socket.once('timeout', () => {
+        finish(new Error(`Luxtronik readParameters timed out after ${timeout}ms`));
+      });
+
+      socket.once('error', (error) => {
+        finish(error);
+      });
+
+      socket.on('data', (data) => {
+        receivedData = Buffer.concat([receivedData, data]);
+        if (receivedData.length < 8) {
+          return;
+        }
+
+        const responseCommand = receivedData.readInt32BE(0);
+        const length = receivedData.readInt32BE(4);
+        const expectedLength = 8 + length * 4;
+
+        if (receivedData.length < expectedLength) {
+          return;
+        }
+
+        if (responseCommand !== command) {
+          finish(new Error(`Luxtronik readParameters response command ${responseCommand} did not match ${command}`));
+          return;
+        }
+
+        const parameters = [];
+        let offset = 8;
+
+        for (let i = 0; i < length; i++) {
+          parameters.push(receivedData.readInt32BE(offset));
+          offset += 4;
+        }
+
+        this.parametersArray = parameters;
+        finish(null, parameters);
+      });
+
+      socket.connect(port, host, () => {
+        const request = Buffer.alloc(8);
+        request.writeInt32BE(command, 0);
+        request.writeInt32BE(0, 4);
+        socket.write(request);
+      });
+    });
+  }
+
+  waitForWriteSettle(timeout) {
+    return new Promise((resolve) => {
+      this.homey.setTimeout(resolve, timeout);
+    });
+  }
+
+  async setDhwTargetTemperature(value) {
+    const parameter = VERIFIED_LUXTRONIK_PARAMETERS.DHW_TARGET;
+    const temperature = Number(value);
+
+    if (!Number.isFinite(temperature)) {
+      throw new Error(`DHW target temperature must be a number, received '${value}'.`);
+    }
+
+    if (temperature < parameter.validationMinCelsius || temperature > parameter.validationMaxCelsius) {
+      throw new Error(`DHW target temperature ${temperature} °C is outside the allowed range of ${parameter.validationMinCelsius}-${parameter.validationMaxCelsius} °C.`);
+    }
+
+    const rawValue = Math.round(temperature * 10);
+
+    this.log('Luxtronik set DHW target temperature requested', {
+      parameterName: parameter.name,
+      parameterIndex: parameter.index,
+      luxtronikName: parameter.luxtronikName,
+      temperature,
+      rawValue,
+    });
+
+    const result = await this.writeParameter(parameter.index, rawValue);
+
+    this.log('Luxtronik set DHW target temperature verified', {
+      parameterName: parameter.name,
+      parameterIndex: parameter.index,
+      luxtronikName: parameter.luxtronikName,
+      temperature,
+      rawValue,
+      writeResponse: result.writeResponse,
+      readBackValue: result.readBackValue,
+    });
+
+    return {
+      parameterName: parameter.name,
+      parameterIndex: parameter.index,
+      luxtronikName: parameter.luxtronikName,
+      temperature,
+      rawValue,
+      writeResponse: result.writeResponse,
+      readBackValue: result.readBackValue,
+    };
+  }
+
+  async testWriteDhwTargetNoop() {
+    const parameter = VERIFIED_LUXTRONIK_PARAMETERS.DHW_TARGET;
+
+    if (!Array.isArray(this.parametersArray) || this.parametersArray[parameter.index] === undefined) {
+      throw new Error(`Cannot run DHW no-op write test: current parameter ${parameter.index} (${parameter.name}) is not available. Wait for a successful parameter scan first.`);
+    }
+
+    const currentRawValue = this.parametersArray[parameter.index];
+
+    if (!Number.isInteger(currentRawValue)) {
+      throw new Error(`Cannot run DHW no-op write test: current parameter ${parameter.index} (${parameter.name}) value '${currentRawValue}' is not an integer.`);
+    }
+
+    this.log('Luxtronik DHW target no-op write test starting', {
+      parameterName: parameter.name,
+      parameterIndex: parameter.index,
+      luxtronikName: parameter.luxtronikName,
+      currentRawValue,
+    });
+
+    const result = await this.writeParameter(parameter.index, currentRawValue);
+
+    this.log('Luxtronik DHW target no-op write test completed', result);
+
+    return result;
+  }
+
+  async writeAndVerifyParameter(parameter, rawValue, operation) {
+    validateTemperatureRawValue(parameter, rawValue);
+    this.log(`Luxtronik ${operation} write starting`, {
+      parameterName: parameter.name,
+      parameterIndex: parameter.index,
+      luxtronikName: parameter.luxtronikName,
+      rawValue,
+      temperature: rawValue / 10,
+    });
+
+    try {
+      const writeResponse = await this.#writeParameterRaw(parameter.index, rawValue);
+      await this.waitForWriteSettle(1500);
+      const parameters = await this.readParameters();
+      const readBackValue = parameters[parameter.index];
+
+      this.log(`Luxtronik ${operation} read-back`, {
+        parameterName: parameter.name,
+        parameterIndex: parameter.index,
+        rawValue,
+        writeResponse,
+        readBackValue,
+      });
+
+      if (readBackValue !== rawValue) {
+        throw new Error(`${parameter.name} read-back verification failed for parameter ${parameter.index}: expected raw value ${rawValue}, got ${readBackValue}.`);
+      }
+
+      return {
+        parameterName: parameter.name,
+        parameterIndex: parameter.index,
+        rawValue,
+        readBackValue,
+        writeResponse,
+      };
+    } catch (error) {
+      this.error(`Luxtronik ${operation} failed`, {
+        parameterName: parameter.name,
+        parameterIndex: parameter.index,
+        rawValue,
+        message: error.message,
+      });
+      throw error;
+    }
+  }
+
+  async testWriteCoolingReleaseTemperatureNoop() {
+    const parameter = VERIFIED_LUXTRONIK_PARAMETERS.COOLING_RELEASE_TEMPERATURE;
+    const parameters = await this.readParameters();
+    const currentRawValue = parameters[parameter.index];
+    validateTemperatureRawValue(parameter, currentRawValue);
+
+    await this.setStoreValue(COOLING_RELEASE_TEST_ORIGINAL_STORE_KEY, currentRawValue);
+    this.coolingReleaseTemperatureTestOriginalRaw = currentRawValue;
+    this.log('Luxtronik cooling release test original value saved', {
+      parameterIndex: parameter.index,
+      rawValue: currentRawValue,
+      temperature: currentRawValue / 10,
+    });
+
+    return this.writeParameter(parameter.index, currentRawValue);
+  }
+
+  async restoreCoolingReleaseTemperature() {
+    const parameter = VERIFIED_LUXTRONIK_PARAMETERS.COOLING_RELEASE_TEMPERATURE;
+    const originalRawValue = this.coolingReleaseTemperatureTestOriginalRaw
+      ?? this.getStoreValue(COOLING_RELEASE_TEST_ORIGINAL_STORE_KEY);
+
+    if (!Number.isInteger(originalRawValue)) {
+      throw new Error('Cannot restore cooling release temperature: no original test value has been saved.');
+    }
+
+    const result = await this.writeParameter(parameter.index, originalRawValue);
+    await this.unsetStoreValue(COOLING_RELEASE_TEST_ORIGINAL_STORE_KEY);
+    this.coolingReleaseTemperatureTestOriginalRaw = null;
+    this.log('Luxtronik cooling release original value restored', result);
+    return result;
+  }
+
 
   /**
    * Send Commands to Luxtronik Devices. 
@@ -271,6 +642,182 @@ class LuxtronikDevice extends Device {
       console.error(`Error: connection failed ${error}`);
       this.destroyClient();
     }
+  }
+
+  decodeCoolingMode(value) {
+    switch (value) {
+      case 0:
+        return 'Off';
+      case 1:
+        return 'Automatic';
+      default:
+        return 'Unknown';
+    }
+  }
+
+  decodeCoolingStatus(value) {
+    switch (value) {
+      case 0:
+        return 'Off';
+      case 1:
+        return 'No demand';
+      case 2:
+        return 'Demand';
+      case 3:
+        return 'Active';
+      default:
+        return 'Unknown';
+    }
+  }
+
+  decodeOperationMode(value) {
+    switch (value) {
+      case 0:
+        return 'Heating';
+      case 1:
+        return 'Hot Water';
+      case 2:
+        return 'Swimming Pool/Solar';
+      case 3:
+        return 'EVU';
+      case 4:
+        return 'Defrost';
+      case 5:
+        return 'No Request';
+      case 6:
+        return 'Heating External';
+      case 7:
+        return 'Cooling';
+      default:
+        return 'Unknown';
+    }
+  }
+
+  formatEnumValue(value, decodedValue) {
+    if (value === undefined || value === null) {
+      return 'unavailable';
+    }
+
+    return `${value} (${decodedValue})`;
+  }
+
+  formatBooleanValue(value) {
+    if (value === undefined || value === null) {
+      return 'unavailable';
+    }
+
+    if (value === 0) {
+      return '0 (No)';
+    }
+
+    if (value === 1) {
+      return '1 (Yes)';
+    }
+
+    return `${value} (Unknown)`;
+  }
+
+  formatRawCelsius(value) {
+    if (value === undefined || value === null) {
+      return 'unavailable';
+    }
+
+    return `${value / 10} °C (raw ${value})`;
+  }
+
+  formatDecodedEnum(value, decodedValue) {
+    if (value === undefined || value === null) {
+      return 'unavailable';
+    }
+
+    return `${decodedValue} (${value})`;
+  }
+
+  getCoolingDiagnosticState() {
+    return {
+      coolingMode: this.parametersArray?.[COOLING_DIAGNOSTIC_FIELDS.COOLING_MODE.index],
+      coolingReleaseTemperature: this.parametersArray?.[COOLING_DIAGNOSTIC_FIELDS.COOLING_RELEASE_TEMPERATURE.index],
+      coolingReleaseActive: this.calulationsArray?.[COOLING_DIAGNOSTIC_FIELDS.COOLING_RELEASE_ACTIVE.index],
+      operationMode: this.calulationsArray?.[COOLING_DIAGNOSTIC_FIELDS.OPERATION_MODE.index],
+      outdoorTemperature: this.temperatureOutdoor,
+    };
+  }
+
+  hasCoolingDiagnosticChanges(previousState, currentState) {
+    return previousState.coolingMode !== currentState.coolingMode
+      || previousState.coolingReleaseTemperature !== currentState.coolingReleaseTemperature
+      || previousState.coolingReleaseActive !== currentState.coolingReleaseActive
+      || previousState.operationMode !== currentState.operationMode
+      || previousState.outdoorTemperature !== currentState.outdoorTemperature;
+  }
+
+  logCoolingChanges(previousState, currentState) {
+    if (!this.hasCoolingDiagnosticChanges(previousState, currentState)) {
+      return;
+    }
+
+    this.log('==================================================');
+    this.log('COOLING EVENT');
+    this.log('==================================================');
+
+    if (previousState.coolingMode !== currentState.coolingMode) {
+      this.log('');
+      this.log('Cooling mode changed');
+      this.log(`Old : ${this.formatDecodedEnum(previousState.coolingMode, this.decodeCoolingMode(previousState.coolingMode))}`);
+      this.log(`New : ${this.formatDecodedEnum(currentState.coolingMode, this.decodeCoolingMode(currentState.coolingMode))}`);
+    }
+
+    if (previousState.coolingReleaseTemperature !== currentState.coolingReleaseTemperature) {
+      this.log('');
+      this.log('Cooling release temperature changed');
+      this.log(`Old : ${this.formatRawCelsius(previousState.coolingReleaseTemperature)}`);
+      this.log(`New : ${this.formatRawCelsius(currentState.coolingReleaseTemperature)}`);
+    }
+
+    if (previousState.coolingReleaseActive !== currentState.coolingReleaseActive) {
+      this.log('');
+      if (currentState.coolingReleaseActive === 1) {
+        this.log('Cooling release became ACTIVE');
+        this.log(`Outdoor temperature : ${this.formatRawCelsius(currentState.outdoorTemperature)}`);
+        this.log(`Release temperature : ${this.formatRawCelsius(currentState.coolingReleaseTemperature)}`);
+      } else if (currentState.coolingReleaseActive === 0) {
+        this.log('Cooling release became INACTIVE');
+        this.log(`Outdoor temperature : ${this.formatRawCelsius(currentState.outdoorTemperature)}`);
+        this.log(`Release temperature : ${this.formatRawCelsius(currentState.coolingReleaseTemperature)}`);
+      } else {
+        this.log('Cooling release active changed');
+        this.log(`Old : ${this.formatBooleanValue(previousState.coolingReleaseActive)}`);
+        this.log(`New : ${this.formatBooleanValue(currentState.coolingReleaseActive)}`);
+      }
+    }
+
+    if (previousState.operationMode !== currentState.operationMode) {
+      this.log('');
+      this.log('Operation mode changed');
+      this.log(`Previous : ${this.formatDecodedEnum(previousState.operationMode, this.decodeOperationMode(previousState.operationMode))}`);
+      this.log(`Current  : ${this.formatDecodedEnum(currentState.operationMode, this.decodeOperationMode(currentState.operationMode))}`);
+    }
+
+    if (previousState.outdoorTemperature !== currentState.outdoorTemperature) {
+      this.log('');
+      this.log('Outdoor temperature changed');
+      this.log(`Old : ${this.formatRawCelsius(previousState.outdoorTemperature)}`);
+      this.log(`New : ${this.formatRawCelsius(currentState.outdoorTemperature)}`);
+    }
+
+    this.log('');
+    this.log(`Timestamp : ${new Date().toISOString()}`);
+    this.log('==================================================');
+  }
+
+  logCoolingStatus() {
+    const currentState = this.getCoolingDiagnosticState();
+
+    if (this.previousCoolingDiagnosticState !== null) {
+      this.logCoolingChanges(this.previousCoolingDiagnosticState, currentState);
+    }
+
+    this.previousCoolingDiagnosticState = currentState;
   }
 
   scanDevice(host, port, timeout) {
@@ -400,6 +947,7 @@ class LuxtronikDevice extends Device {
       try {
         await sendCommands(3003);
         await sendCommands(3004);
+        this.logCoolingStatus();
       } catch (error) {
         this.log("This happens almost never.")
       }
