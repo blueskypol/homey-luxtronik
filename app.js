@@ -13,7 +13,19 @@ class MyApp extends Homey.App {
     this.homey.flow
       .getActionCard('set_dhw_target_temperature')
       .registerRunListener(async (args) => {
-        return await args.device.setDhwTargetTemperature(args.temperature);
+        return args.device.setDhwTargetTemperature(args.temperature);
+      });
+
+    this.homey.flow
+      .getActionCard('set_cooling_release_temperature')
+      .registerRunListener(async (args) => {
+        return args.device.setCoolingReleaseTemperature(args.temperature);
+      });
+
+    this.homey.flow
+      .getActionCard('restore_cooling_release_temperature')
+      .registerRunListener(async (args) => {
+        return args.device.restoreCoolingReleaseTemperature();
       });
   }
 
