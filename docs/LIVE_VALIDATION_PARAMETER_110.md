@@ -66,7 +66,9 @@ After live validation, two manual Flow actions were added:
 
 Repeated set actions preserve the first saved value, so restore returns to the
 setting from before the sequence rather than to the most recent intermediate
-value. No timer or automatic cooling strategy is implemented.
+value. Set and restore actions are serialized per device, so concurrent Homey
+Flows cannot interleave a write with restoration or clear the saved original
+prematurely. No timer or automatic cooling strategy is implemented.
 
 ### Homey Flow live result (2026-08-12)
 

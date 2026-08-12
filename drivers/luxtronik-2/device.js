@@ -104,6 +104,7 @@ class LuxtronikDevice extends Device {
     this.calulationsArray = null;
     this.previousCoolingDiagnosticState = null;
     this.coolingReleaseTemperatureTestOriginalRaw = this.getStoreValue(COOLING_RELEASE_TEST_ORIGINAL_STORE_KEY);
+    this.coolingReleaseOperationQueue = Promise.resolve();
 
     this.scan();
 
@@ -584,7 +585,11 @@ class LuxtronikDevice extends Device {
     }
   }
 
-  async testWriteCoolingReleaseTemperatureNoop() {
+  testWriteCoolingReleaseTemperatureNoop() {
+    return this.queueCoolingReleaseOperation(() => this.testWriteCoolingReleaseTemperatureNoopQueued());
+  }
+
+  async testWriteCoolingReleaseTemperatureNoopQueued() {
     const parameter = VERIFIED_LUXTRONIK_PARAMETERS.COOLING_RELEASE_TEMPERATURE;
     const parameters = await this.readParameters();
     const currentRawValue = parameters[parameter.index];
@@ -618,7 +623,19 @@ class LuxtronikDevice extends Device {
     return currentRawValue;
   }
 
-  async setCoolingReleaseTemperature(value) {
+  queueCoolingReleaseOperation(operation) {
+    const previousOperation = this.coolingReleaseOperationQueue || Promise.resolve();
+    const currentOperation = previousOperation.catch(() => {}).then(operation);
+
+    this.coolingReleaseOperationQueue = currentOperation.catch(() => {});
+    return currentOperation;
+  }
+
+  setCoolingReleaseTemperature(value) {
+    return this.queueCoolingReleaseOperation(() => this.setCoolingReleaseTemperatureQueued(value));
+  }
+
+  async setCoolingReleaseTemperatureQueued(value) {
     const parameter = VERIFIED_LUXTRONIK_PARAMETERS.COOLING_RELEASE_TEMPERATURE;
     const temperature = Number(value);
 
@@ -649,7 +666,11 @@ class LuxtronikDevice extends Device {
     return this.writeParameter(parameter.index, rawValue);
   }
 
-  async restoreCoolingReleaseTemperature() {
+  restoreCoolingReleaseTemperature() {
+    return this.queueCoolingReleaseOperation(() => this.restoreCoolingReleaseTemperatureQueued());
+  }
+
+  async restoreCoolingReleaseTemperatureQueued() {
     const parameter = VERIFIED_LUXTRONIK_PARAMETERS.COOLING_RELEASE_TEMPERATURE;
     const originalRawValue = this.coolingReleaseTemperatureTestOriginalRaw
       ?? this.getStoreValue(COOLING_RELEASE_TEST_ORIGINAL_STORE_KEY);

@@ -23,6 +23,7 @@ Added
 - Manual Flow action for setting the live-validated cooling release temperature.
 - Manual Flow action for restoring its persistently saved original value.
 - Strict `10-35 °C` validation in `0.5 °C` increments and mandatory read-back.
+- Per-device serialization of cooling release set and restore actions.
 
 Fixed
 
