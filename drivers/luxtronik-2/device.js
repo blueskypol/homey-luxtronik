@@ -13,6 +13,10 @@ const {
   getWritableParameter,
   validateTemperatureRawValue,
 } = require('../../lib/LuxtronikWriteSupport');
+const {
+  readCurrentPower,
+  readEnergyInputs,
+} = require('../../lib/LuxtronikEnergySupport');
 
 const COOLING_RELEASE_TEST_ORIGINAL_STORE_KEY = 'coolingReleaseTemperatureTestOriginalRaw';
 
@@ -184,7 +188,7 @@ class LuxtronikDevice extends Device {
       }
       if (this.energyWater !== null) await this.setCapabilityValue('meter_power.water', this.energyWater / 10).catch(this.error);
       if (this.energyPool !== null) await this.setCapabilityValue('meter_power.pool', this.energyPool / 10).catch(this.error);
-      if (this.parametersArray !== null) await this.setCapabilityValue('meter_power.heat2', this.parametersArray[1059] / 10).catch(this.error);
+      if (Number.isFinite(this.parametersArray?.[1059])) await this.setCapabilityValue('meter_power.heat2', this.parametersArray[1059] / 10).catch(this.error);
 
       if (this.parametersArray !== null && this.calulationsArray !== null && this.energyTotal !== null) {
         this.log("Not null")
@@ -207,7 +211,7 @@ class LuxtronikDevice extends Device {
       // if (this.energyInputWater !== null) await this.setCapabilityValue('meter_power.water', this.energyWater / 100).catch(this.error);
       // if (this.energyInputPool !== null) await this.setCapabilityValue('meter_power.pool', this.energyPool / 100).catch(this.error);
 
-      if (this.energyCurrent !== null) await this.setCapabilityValue('measure_power.current', this.energyCurrent).catch(this.error);
+      if (Number.isFinite(this.energyCurrent)) await this.setCapabilityValue('measure_power.current', this.energyCurrent).catch(this.error);
 
       if (this.temperatureOutdoor !== null) await this.setCapabilityValue('measure_temperature.outdoor', this.temperatureOutdoor / 10).catch(this.error);
       if (this.temperatureHotGas !== null) await this.setCapabilityValue('measure_temperature.hotgas', this.temperatureHotGas / 10).catch(this.error);
@@ -913,19 +917,22 @@ class LuxtronikDevice extends Device {
                 // for (const [i, value] of array_parameter.entries()) {
                 //   this.log(i, value);
                 // }
-                this.log("PARAM HEAT_ENERGY_INPUT" + array_parameter[1136]);
-                this.log("PARAM WATER_ENERGY_INPUT" + array_parameter[1137]);
-                this.log("PARAM POOL_ENERGY_INPUT" + array_parameter[1138]);
-                this.log("PARAM COOL_ENERGY_INPUT" + array_parameter[1139]);
-                this.log("PARAM SECOND_ENERGY_INPUT" + array_parameter[1140]);
-                let energyInputTotal = array_parameter[1136] + array_parameter[1137] + array_parameter[1138] + array_parameter[1139] + array_parameter[1140]
-                this.log("PARAM TOTAL_ENERGY_INPUT" + energyInputTotal);
-
-                this.energyInputHeat = (array_parameter[1136]);
-                this.energyInputCool = (array_parameter[1139]);
-                this.energyInputWater = (array_parameter[1137]);
-                this.energyInputPool = (array_parameter[1138]);
-                this.energyInputTotal = (array_parameter[1136] + array_parameter[1137] + array_parameter[1138] + array_parameter[1139] + array_parameter[1140]);
+                const energyInputs = readEnergyInputs(array_parameter);
+                if (energyInputs === null) {
+                  this.energyInputHeat = null;
+                  this.energyInputCool = null;
+                  this.energyInputWater = null;
+                  this.energyInputPool = null;
+                  this.energyInputTotal = null;
+                  this.log('Energy input parameters 1136-1140 are unavailable on this firmware');
+                } else {
+                  this.energyInputHeat = energyInputs.heat;
+                  this.energyInputCool = energyInputs.cool;
+                  this.energyInputWater = energyInputs.water;
+                  this.energyInputPool = energyInputs.pool;
+                  this.energyInputTotal = energyInputs.total;
+                  this.log('Luxtronik energy input values', energyInputs);
+                }
 
                 this.parametersArray = array_parameter;
 
@@ -952,7 +959,7 @@ class LuxtronikDevice extends Device {
                 this.energyTotal = (array_calculated[154]);
 
 
-                this.energyCurrent = (array_calculated[257]);
+                this.energyCurrent = readCurrentPower(array_calculated);
 
                 this.temperatureOutdoor = (array_calculated[15]);
                 this.temperatureHotGas = (array_calculated[14]);

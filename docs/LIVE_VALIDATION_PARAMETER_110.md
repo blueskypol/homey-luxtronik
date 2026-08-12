@@ -67,3 +67,17 @@ After live validation, two manual Flow actions were added:
 Repeated set actions preserve the first saved value, so restore returns to the
 setting from before the sequence rather than to the most recent intermediate
 value. No timer or automatic cooling strategy is implemented.
+
+### Homey Flow live result (2026-08-12)
+
+The Flow actions were run against the physical controller:
+
+1. Set `19.0 -> 20.0 °C`: command `3002` acknowledged parameter `110`; exact
+   raw `200` read-back succeeded.
+2. Set `20.0 -> 15.0 °C`: the first original raw `190` remained stored; command
+   `3002` and exact raw `150` read-back succeeded.
+3. Restore original: `15.0 -> 19.0 °C`; command `3002` and exact raw `190`
+   read-back succeeded, after which the saved original was cleared.
+
+The polling diagnostics independently observed both `20 -> 15 °C` and
+`15 -> 19 °C`. The controller was left at its original `19.0 °C` setting.
