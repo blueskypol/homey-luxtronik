@@ -50,7 +50,7 @@ Currently verified write support:
 |-----------|------:|-------------|--------|
 | ID_Soll_BWS_akt | 105 | DHW target temperature | ✅ Implemented |
 | ID_Einst_KuehlFreig_akt | 110 | Cooling release temperature | ✅ Implemented |
-| ID_Einst_WK_akt | 1 | Heating curve correction | ⏳ Device write/restore methods implemented; no Flow card yet (not yet live-validated, see docs/HEATING_RESEARCH.md) |
+| ID_Einst_WK_akt | 1 | Heating curve correction | ✅ Implemented (live-validated 2026-10-22, see docs/LIVE_VALIDATION_PARAMETER_1.md) |
 
 Current write safety:
 
@@ -130,6 +130,21 @@ Range:
 
 ---
 
+### Set/Restore heating curve correction
+
+Purpose:
+
+Temporarily shift the heating curve warmer or cooler (and later restore the
+original value), e.g. to preheat the floor during PV surplus. Does not
+change the heating mode. See docs/HEATING_RESEARCH.md for the research
+behind this parameter and docs/LIVE_VALIDATION_PARAMETER_1.md for the live
+validation result (including the caveat that no immediate setpoint change
+was observed with no active heat demand).
+
+Range:
+
+−5…+5 °C, step 0.5 °C
+
 ---
 
 ## Trigger Cards
@@ -181,27 +196,32 @@ docs/COOLING_RESEARCH.md
 
 Current status:
 
-Research complete, device write/restore support implemented, Flow card
-intentionally not yet added.
+Research complete, device write/restore support implemented, live-validated
+on the real controller, Flow cards added.
 
-Implemented (developer-only, not exposed as a Flow card yet):
+Implemented:
 
 - `LuxtronikDevice#setHeatingCurveCorrection(value)` — writes parameter 1
   (`ID_Einst_WK_akt`, °C/10, range −5…+5 °C), saves the original value once.
 - `LuxtronikDevice#restoreHeatingCurveCorrection()` — restores the saved
   original and clears it.
-- `LuxtronikDevice#testWriteHeatingCurveCorrectionNoop()` — the required
-  first live-test step (read current value, write it back unchanged, verify
-  read-back) before any real change.
+- `LuxtronikDevice#testWriteHeatingCurveCorrectionNoop()` — the no-op
+  live-test step (read current value, write it back unchanged, verify
+  read-back).
+- Flow cards: Set heating curve correction / Restore original heating curve
+  correction.
+- Live-validated 2026-10-22 (see docs/LIVE_VALIDATION_PARAMETER_1.md):
+  write + read-back confirmed exact; the computed setpoint did **not**
+  visibly change within the test window (no active heat demand at the
+  time) — the effect on real heat output is still unconfirmed.
 
 Not yet implemented:
 
-- Heating curve correction Flow cards (deliberately deferred — see
-  docs/LIVE_VALIDATION_PARAMETER_110.md for why this project adds a Flow
-  card only after live validation on a real controller, not before)
 - Circuit-specific endpoint/level/night-setback parameters (11/12/13)
 - Heating optimisation / PV-aware Advanced Flow logic (lives in the
   `homey-climate-toolkit` project, not in this app)
+- Confirmation of the correction's effect during a real active heating
+  cycle (the live test above ran with the compressor idle)
 
 Research document:
 

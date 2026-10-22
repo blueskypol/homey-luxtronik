@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const Module = require('node:module');
 const test = require('node:test');
+const appManifest = require('../app.json');
 
 const originalModuleLoad = Module._load;
 Module._load = function load(request, parent, isMain) {
@@ -172,9 +173,14 @@ test('continues the queue after a failed operation', async () => {
   assert.deepEqual(writes, [{ index: 1, rawValue: -10 }]);
 });
 
-// No "Flow metadata exposes..." test here yet, unlike the DHW/cooling-release
-// equivalents: this parameter has not been live-validated on a real
-// controller yet, so no Flow action card exists in app.json by design (see
-// docs/HEATING_RESEARCH.md "Recommended Safe Live Test Order" and
-// docs/LIVE_VALIDATION_PARAMETER_110.md for the established precedent). Add
-// this test alongside the Flow card once that validation is recorded.
+test('Flow metadata exposes guarded set and restore actions', () => {
+  const setAction = appManifest.flow.actions.find(({ id }) => id === 'set_heating_curve_correction');
+  const restoreAction = appManifest.flow.actions.find(({ id }) => id === 'restore_heating_curve_correction');
+  const correction = setAction.args.find(({ name }) => name === 'correction');
+
+  assert.ok(setAction);
+  assert.ok(restoreAction);
+  assert.equal(correction.min, -5);
+  assert.equal(correction.max, 5);
+  assert.equal(correction.step, 0.5);
+});

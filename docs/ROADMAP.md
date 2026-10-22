@@ -104,7 +104,8 @@ Goal:
 
 Investigate temporary heating optimisation using excess solar energy.
 
-Status: in progress.
+Status: write support and Flow cards done; live validation complete;
+Advanced Flow not yet built.
 
 - Research complete: docs/HEATING_RESEARCH.md. Verified circuit identity
   (direct circuit, not Mixing Circuit 1) and identified the primary
@@ -112,16 +113,18 @@ Status: in progress.
   index 1), independently corroborated by a second open-source Homey app.
 - Device write/restore/no-op-test methods implemented
   (`setHeatingCurveCorrection`, `restoreHeatingCurveCorrection`,
-  `testWriteHeatingCurveCorrectionNoop`). **No Flow card yet, by design** —
-  following the same precedent as parameter 110
-  (docs/LIVE_VALIDATION_PARAMETER_110.md), a Flow card is only added after
-  live validation on a real controller, never before.
-- Still pending: the no-op + small reversible live test on the real
-  controller (see docs/HEATING_RESEARCH.md "Recommended Safe Live Test
-  Order"); only after that succeeds, add the Flow card registrations to
-  `app.js`/`driver.flow.compose.json`; then the Homey-side Advanced Flow
-  that ties this to PV surplus (lives in the `homey-climate-toolkit`
-  project, not in this app).
+  `testWriteHeatingCurveCorrectionNoop`).
+- Live-validated on the real controller 2026-10-22 (0.0 -> 1.0 -> 0.0 °C,
+  exact read-back at every step — see docs/LIVE_VALIDATION_PARAMETER_1.md).
+  Important caveat recorded there: the computed setpoint did not visibly
+  react within the test window, which had no active heat demand — the
+  effect on actual heat output during a real cycle is still unconfirmed.
+- Flow cards added after validation: **Set heating curve correction** and
+  **Restore original heating curve correction** (same pattern as parameter
+  110's cooling-release actions).
+- Still pending: the Homey-side Advanced Flow that ties this to PV surplus
+  (lives in the `homey-climate-toolkit` project, not in this app), and
+  confirming the correction's effect during a real active heating cycle.
 
 ---
 

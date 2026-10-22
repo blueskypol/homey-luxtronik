@@ -203,6 +203,13 @@ is no inflexible schedule to fight against.
 
 ## Recommended Safe Live Test Order
 
+**Status: steps 1–4 completed on 2026-10-22 — see
+docs/LIVE_VALIDATION_PARAMETER_1.md for the full recorded result.** Summary:
+write + read-back confirmed exact at every step (no-op, +1.0 °C, restore to
+0.0 °C); `ID_WEB_Sollwert_TRL_HZ` did not visibly change within the test
+window, which ran with no active heat demand — the effect on real heat
+output during an active cycle is still unconfirmed.
+
 No live test should write a new parameter until packet format, allowed
 values, read-back verification and restore strategy are prepared — all of
 which already exist generically in `lib/LuxtronikWriteSupport.js` and
@@ -273,14 +280,17 @@ which already exist generically in `lib/LuxtronikWriteSupport.js` and
 For the current Homey CFI integration, the safest Flow-card candidate for
 this round is:
 
-1. A future `set_heating_curve_correction` / `restore_heating_curve_correction`
-   Flow card, writing `ID_Einst_WK_akt` (parameter 1), range −5…+5 °C, step
-   0.5 °C. The device-level write/restore/no-op-test methods are already
-   implemented in this branch, following the exact save/queue/set/restore
-   pattern already used for `COOLING_RELEASE_TEMPERATURE` — but the Flow
-   card itself is deliberately **not yet added** (see "Recommended Safe
-   Live Test Order" above and docs/LIVE_VALIDATION_PARAMETER_110.md for why
-   validation must come first).
+1. `set_heating_curve_correction` / `restore_heating_curve_correction`,
+   writing `ID_Einst_WK_akt` (parameter 1), range −5…+5 °C, step 0.5 °C.
+   Implemented following the exact save/queue/set/restore pattern already
+   used for `COOLING_RELEASE_TEMPERATURE`, and **live-validated** on
+   2026-10-22 (docs/LIVE_VALIDATION_PARAMETER_1.md) before the Flow card was
+   added, per this project's own precedent
+   (docs/LIVE_VALIDATION_PARAMETER_110.md). Remaining open item: the
+   validation ran with no active heat demand, so the correction's effect on
+   the computed setpoint and on real heat output during an active cycle is
+   still unconfirmed — verify this once the PV-aware Advanced Flow is live
+   (see `homey-climate-toolkit/docs/HEAT_PUMP_ENERGY_RESEARCH.md` §6).
 
 Do not expose the circuit-specific endpoint/level/night-setback parameters
 (11/12/13), the RBE room target (1148), or the MK2/MK3 triads as Flow cards

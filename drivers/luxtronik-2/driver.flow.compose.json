@@ -82,6 +82,42 @@
         "nl": "Herstel de oorspronkelijke koelvrijgavetemperatuur"
       },
       "args": []
+    },
+    {
+      "id": "set_heating_curve_correction",
+      "title": {
+        "en": "Set heating curve correction",
+        "nl": "Stel stooklijncorrectie in"
+      },
+      "titleFormatted": {
+        "en": "Set heating curve correction to [[correction]] °C",
+        "nl": "Stel stooklijncorrectie in op [[correction]] °C"
+      },
+      "args": [
+        {
+          "type": "number",
+          "name": "correction",
+          "title": {
+            "en": "Heating curve correction (global shift, not a room target)",
+            "nl": "Stooklijncorrectie (globale verschuiving, geen kamerdoel)"
+          },
+          "min": -5,
+          "max": 5,
+          "step": 0.5
+        }
+      ]
+    },
+    {
+      "id": "restore_heating_curve_correction",
+      "title": {
+        "en": "Restore original heating curve correction",
+        "nl": "Herstel oorspronkelijke stooklijncorrectie"
+      },
+      "titleFormatted": {
+        "en": "Restore the original heating curve correction",
+        "nl": "Herstel de oorspronkelijke stooklijncorrectie"
+      },
+      "args": []
     }
   ]
 }
