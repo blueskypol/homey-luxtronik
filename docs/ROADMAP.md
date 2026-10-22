@@ -104,12 +104,24 @@ Goal:
 
 Investigate temporary heating optimisation using excess solar energy.
 
-Possible Flow cards:
+Status: in progress.
 
-- Enable Solar Heating
-- Disable Solar Heating
-
-Implementation depends on verified writable heating parameters.
+- Research complete: docs/HEATING_RESEARCH.md. Verified circuit identity
+  (direct circuit, not Mixing Circuit 1) and identified the primary
+  candidate parameter (`ID_Einst_WK_akt`, global heating-curve correction,
+  index 1), independently corroborated by a second open-source Homey app.
+- Device write/restore/no-op-test methods implemented
+  (`setHeatingCurveCorrection`, `restoreHeatingCurveCorrection`,
+  `testWriteHeatingCurveCorrectionNoop`). **No Flow card yet, by design** —
+  following the same precedent as parameter 110
+  (docs/LIVE_VALIDATION_PARAMETER_110.md), a Flow card is only added after
+  live validation on a real controller, never before.
+- Still pending: the no-op + small reversible live test on the real
+  controller (see docs/HEATING_RESEARCH.md "Recommended Safe Live Test
+  Order"); only after that succeeds, add the Flow card registrations to
+  `app.js`/`driver.flow.compose.json`; then the Homey-side Advanced Flow
+  that ties this to PV surplus (lives in the `homey-climate-toolkit`
+  project, not in this app).
 
 ---
 

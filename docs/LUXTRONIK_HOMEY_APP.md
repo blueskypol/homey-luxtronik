@@ -49,6 +49,8 @@ Currently verified write support:
 | Parameter | Index | Description | Status |
 |-----------|------:|-------------|--------|
 | ID_Soll_BWS_akt | 105 | DHW target temperature | ✅ Implemented |
+| ID_Einst_KuehlFreig_akt | 110 | Cooling release temperature | ✅ Implemented |
+| ID_Einst_WK_akt | 1 | Heating curve correction | ⏳ Device write/restore methods implemented; no Flow card yet (not yet live-validated, see docs/HEATING_RESEARCH.md) |
 
 Current write safety:
 
@@ -115,6 +117,21 @@ Implementation:
 
 ---
 
+### Set/Restore cooling release temperature
+
+Purpose:
+
+Temporarily adjust (and later restore) the outdoor-average-temperature
+threshold that releases controller-managed cooling.
+
+Range:
+
+10–35 °C
+
+---
+
+---
+
 ## Trigger Cards
 
 ### Operation mode changed
@@ -157,6 +174,38 @@ Not yet implemented:
 Research document:
 
 docs/COOLING_RESEARCH.md
+
+---
+
+# Heating Support
+
+Current status:
+
+Research complete, device write/restore support implemented, Flow card
+intentionally not yet added.
+
+Implemented (developer-only, not exposed as a Flow card yet):
+
+- `LuxtronikDevice#setHeatingCurveCorrection(value)` — writes parameter 1
+  (`ID_Einst_WK_akt`, °C/10, range −5…+5 °C), saves the original value once.
+- `LuxtronikDevice#restoreHeatingCurveCorrection()` — restores the saved
+  original and clears it.
+- `LuxtronikDevice#testWriteHeatingCurveCorrectionNoop()` — the required
+  first live-test step (read current value, write it back unchanged, verify
+  read-back) before any real change.
+
+Not yet implemented:
+
+- Heating curve correction Flow cards (deliberately deferred — see
+  docs/LIVE_VALIDATION_PARAMETER_110.md for why this project adds a Flow
+  card only after live validation on a real controller, not before)
+- Circuit-specific endpoint/level/night-setback parameters (11/12/13)
+- Heating optimisation / PV-aware Advanced Flow logic (lives in the
+  `homey-climate-toolkit` project, not in this app)
+
+Research document:
+
+docs/HEATING_RESEARCH.md
 
 ---
 
