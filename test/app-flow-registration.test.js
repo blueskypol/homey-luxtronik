@@ -50,3 +50,10 @@ test('registers and delegates cooling release Flow actions', async () => {
 
   assert.deepEqual(calls, [['set', 20], ['restore']]);
 });
+
+// No "registers and delegates heating curve correction Flow actions" test
+// yet: app.js deliberately does not register these action cards until the
+// parameter has been live-validated on a real controller (see
+// docs/HEATING_RESEARCH.md and docs/LIVE_VALIDATION_PARAMETER_110.md for the
+// established precedent). Add this test once that validation is recorded
+// and the two registerRunListener calls are added to app.js.

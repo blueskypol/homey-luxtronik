@@ -9,10 +9,12 @@ const {
 } = require('../lib/LuxtronikWriteSupport');
 
 const coolingRelease = VERIFIED_LUXTRONIK_PARAMETERS.COOLING_RELEASE_TEMPERATURE;
+const heatingCurveCorrection = VERIFIED_LUXTRONIK_PARAMETERS.HEATING_CURVE_CORRECTION;
 
 test('allowlists only the explicitly verified parameters', () => {
   assert.equal(getWritableParameter(105).name, 'DHW_TARGET');
   assert.equal(getWritableParameter(110), coolingRelease);
+  assert.equal(getWritableParameter(1), heatingCurveCorrection);
   assert.equal(getWritableParameter(108), null);
   assert.equal(getWritableParameter(109), null);
 });
@@ -28,4 +30,18 @@ test('strictly rejects invalid or out-of-range cooling release values', () => {
   assert.throws(() => validateTemperatureRawValue(coolingRelease, 351), /outside the test range/);
   assert.throws(() => validateTemperatureRawValue(coolingRelease, 220.5), /non-integer/);
   assert.throws(() => validateTemperatureRawValue(coolingRelease, NaN), /non-integer/);
+});
+
+test('defines heating curve correction as Celsius tenths', () => {
+  assert.equal(heatingCurveCorrection.index, 1);
+  assert.equal(heatingCurveCorrection.unit, '°C/10');
+  assert.equal(validateTemperatureRawValue(heatingCurveCorrection, 10), 10);
+  assert.equal(validateTemperatureRawValue(heatingCurveCorrection, -10), -10);
+});
+
+test('strictly rejects invalid or out-of-range heating curve correction values', () => {
+  assert.throws(() => validateTemperatureRawValue(heatingCurveCorrection, -51), /outside the test range/);
+  assert.throws(() => validateTemperatureRawValue(heatingCurveCorrection, 51), /outside the test range/);
+  assert.throws(() => validateTemperatureRawValue(heatingCurveCorrection, 10.5), /non-integer/);
+  assert.throws(() => validateTemperatureRawValue(heatingCurveCorrection, NaN), /non-integer/);
 });

@@ -19,6 +19,7 @@ const {
 } = require('../../lib/LuxtronikEnergySupport');
 
 const COOLING_RELEASE_TEST_ORIGINAL_STORE_KEY = 'coolingReleaseTemperatureTestOriginalRaw';
+const HEATING_CURVE_CORRECTION_TEST_ORIGINAL_STORE_KEY = 'heatingCurveCorrectionTestOriginalRaw';
 
 const COOLING_DIAGNOSTIC_FIELDS = Object.freeze({
   COOLING_MODE: Object.freeze({
@@ -105,6 +106,8 @@ class LuxtronikDevice extends Device {
     this.previousCoolingDiagnosticState = null;
     this.coolingReleaseTemperatureTestOriginalRaw = this.getStoreValue(COOLING_RELEASE_TEST_ORIGINAL_STORE_KEY);
     this.coolingReleaseOperationQueue = Promise.resolve();
+    this.heatingCurveCorrectionTestOriginalRaw = this.getStoreValue(HEATING_CURVE_CORRECTION_TEST_ORIGINAL_STORE_KEY);
+    this.heatingCurveCorrectionOperationQueue = Promise.resolve();
 
     this.scan();
 
@@ -683,6 +686,107 @@ class LuxtronikDevice extends Device {
     await this.unsetStoreValue(COOLING_RELEASE_TEST_ORIGINAL_STORE_KEY);
     this.coolingReleaseTemperatureTestOriginalRaw = null;
     this.log('Luxtronik cooling release original value restored', result);
+    return result;
+  }
+
+  testWriteHeatingCurveCorrectionNoop() {
+    return this.queueHeatingCurveCorrectionOperation(() => this.testWriteHeatingCurveCorrectionNoopQueued());
+  }
+
+  async testWriteHeatingCurveCorrectionNoopQueued() {
+    const parameter = VERIFIED_LUXTRONIK_PARAMETERS.HEATING_CURVE_CORRECTION;
+    const parameters = await this.readParameters();
+    const currentRawValue = parameters[parameter.index];
+    validateTemperatureRawValue(parameter, currentRawValue);
+
+    await this.saveHeatingCurveCorrectionOriginal(currentRawValue);
+    this.log('Luxtronik heating curve correction test original value saved', {
+      parameterIndex: parameter.index,
+      rawValue: currentRawValue,
+      temperature: currentRawValue / 10,
+    });
+
+    return this.writeParameter(parameter.index, currentRawValue);
+  }
+
+  async saveHeatingCurveCorrectionOriginal(currentRawValue) {
+    const savedRawValue = this.heatingCurveCorrectionTestOriginalRaw
+      ?? this.getStoreValue(HEATING_CURVE_CORRECTION_TEST_ORIGINAL_STORE_KEY);
+
+    if (savedRawValue !== undefined && savedRawValue !== null) {
+      validateTemperatureRawValue(
+        VERIFIED_LUXTRONIK_PARAMETERS.HEATING_CURVE_CORRECTION,
+        savedRawValue,
+      );
+      this.heatingCurveCorrectionTestOriginalRaw = savedRawValue;
+      return savedRawValue;
+    }
+
+    await this.setStoreValue(HEATING_CURVE_CORRECTION_TEST_ORIGINAL_STORE_KEY, currentRawValue);
+    this.heatingCurveCorrectionTestOriginalRaw = currentRawValue;
+    return currentRawValue;
+  }
+
+  queueHeatingCurveCorrectionOperation(operation) {
+    const previousOperation = this.heatingCurveCorrectionOperationQueue || Promise.resolve();
+    const currentOperation = previousOperation.catch(() => {}).then(operation);
+
+    this.heatingCurveCorrectionOperationQueue = currentOperation.catch(() => {});
+    return currentOperation;
+  }
+
+  setHeatingCurveCorrection(value) {
+    return this.queueHeatingCurveCorrectionOperation(() => this.setHeatingCurveCorrectionQueued(value));
+  }
+
+  async setHeatingCurveCorrectionQueued(value) {
+    const parameter = VERIFIED_LUXTRONIK_PARAMETERS.HEATING_CURVE_CORRECTION;
+    const temperature = Number(value);
+
+    if (!Number.isFinite(temperature)) {
+      throw new Error(`Heating curve correction must be a number, received '${value}'.`);
+    }
+    if (!Number.isInteger(temperature * 2)) {
+      throw new Error(`Heating curve correction ${temperature} °C must use 0.5 °C increments.`);
+    }
+
+    const rawValue = temperature * 10;
+    validateTemperatureRawValue(parameter, rawValue);
+
+    const parameters = await this.readParameters();
+    const currentRawValue = parameters[parameter.index];
+    validateTemperatureRawValue(parameter, currentRawValue);
+    const originalRawValue = await this.saveHeatingCurveCorrectionOriginal(currentRawValue);
+
+    this.log('Luxtronik set heating curve correction requested', {
+      parameterIndex: parameter.index,
+      luxtronikName: parameter.luxtronikName,
+      originalRawValue,
+      currentRawValue,
+      rawValue,
+      temperature,
+    });
+
+    return this.writeParameter(parameter.index, rawValue);
+  }
+
+  restoreHeatingCurveCorrection() {
+    return this.queueHeatingCurveCorrectionOperation(() => this.restoreHeatingCurveCorrectionQueued());
+  }
+
+  async restoreHeatingCurveCorrectionQueued() {
+    const parameter = VERIFIED_LUXTRONIK_PARAMETERS.HEATING_CURVE_CORRECTION;
+    const originalRawValue = this.heatingCurveCorrectionTestOriginalRaw
+      ?? this.getStoreValue(HEATING_CURVE_CORRECTION_TEST_ORIGINAL_STORE_KEY);
+
+    if (!Number.isInteger(originalRawValue)) {
+      throw new Error('Cannot restore heating curve correction: no original test value has been saved.');
+    }
+
+    const result = await this.writeParameter(parameter.index, originalRawValue);
+    await this.unsetStoreValue(HEATING_CURVE_CORRECTION_TEST_ORIGINAL_STORE_KEY);
+    this.heatingCurveCorrectionTestOriginalRaw = null;
+    this.log('Luxtronik heating curve correction original value restored', result);
     return result;
   }
 
