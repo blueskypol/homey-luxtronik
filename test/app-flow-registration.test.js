@@ -18,6 +18,9 @@ Module._load = function load(request, parent, isMain) {
               getActionCard: (id) => ({
                 registerRunListener: (listener) => listeners.set(id, listener),
               }),
+              getConditionCard: (id) => ({
+                registerRunListener: (listener) => listeners.set(id, listener),
+              }),
             },
           };
         }
@@ -69,4 +72,22 @@ test('registers and delegates heating curve correction Flow actions', async () =
   await listeners.get('restore_heating_curve_correction')({ device });
 
   assert.deepEqual(calls, [['set', 1], ['restore']]);
+});
+
+test('registers and delegates the operation mode condition', async () => {
+  listeners.clear();
+  const app = new LuxtronikApp();
+  await app.onInit();
+
+  assert.ok(listeners.has('operation_mode_is'));
+
+  const device = {
+    getCapabilityValue: (capability) => {
+      assert.equal(capability, 'luxtronik_operationmode');
+      return 'Cooling';
+    },
+  };
+
+  assert.equal(await listeners.get('operation_mode_is')({ device, mode: 'Cooling' }), true);
+  assert.equal(await listeners.get('operation_mode_is')({ device, mode: 'Heating' }), false);
 });

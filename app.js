@@ -39,6 +39,12 @@ class MyApp extends Homey.App {
       .registerRunListener(async (args) => {
         return args.device.restoreHeatingCurveCorrection();
       });
+
+    this.homey.flow
+      .getConditionCard('operation_mode_is')
+      .registerRunListener(async (args) => {
+        return args.device.getCapabilityValue('luxtronik_operationmode') === args.mode;
+      });
   }
 
 }

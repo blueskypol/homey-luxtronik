@@ -119,5 +119,38 @@
       },
       "args": []
     }
+  ],
+  "conditions": [
+    {
+      "id": "operation_mode_is",
+      "title": {
+        "en": "Operation mode !{{is|is not}} [[mode]]",
+        "nl": "Bedrijfsmodus !{{is|is niet}} [[mode]]"
+      },
+      "titleFormatted": {
+        "en": "Operation mode !{{is|is not}} [[mode]]",
+        "nl": "Bedrijfsmodus !{{is|is niet}} [[mode]]"
+      },
+      "args": [
+        {
+          "type": "dropdown",
+          "name": "mode",
+          "title": {
+            "en": "Mode",
+            "nl": "Modus"
+          },
+          "values": [
+            { "id": "Heating", "label": { "en": "Heating", "nl": "Verwarmen" } },
+            { "id": "Hot Water", "label": { "en": "Hot Water", "nl": "Warm water" } },
+            { "id": "Swimming Pool/Solar", "label": { "en": "Swimming Pool/Solar", "nl": "Zwembad/Zonneboiler" } },
+            { "id": "EVU", "label": { "en": "EVU", "nl": "EVU" } },
+            { "id": "Defrost", "label": { "en": "Defrost", "nl": "Ontdooien" } },
+            { "id": "No Request", "label": { "en": "No Request", "nl": "Geen vraag" } },
+            { "id": "Heating External", "label": { "en": "Heating External", "nl": "Externe verwarming" } },
+            { "id": "Cooling", "label": { "en": "Cooling", "nl": "Koelen" } }
+          ]
+        }
+      ]
+    }
   ]
 }
