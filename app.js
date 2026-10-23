@@ -9,6 +9,42 @@ class MyApp extends Homey.App {
    */
   async onInit() {
     this.log('MyApp has been initialized');
+
+    this.homey.flow
+      .getActionCard('set_dhw_target_temperature')
+      .registerRunListener(async (args) => {
+        return args.device.setDhwTargetTemperature(args.temperature);
+      });
+
+    this.homey.flow
+      .getActionCard('set_cooling_release_temperature')
+      .registerRunListener(async (args) => {
+        return args.device.setCoolingReleaseTemperature(args.temperature);
+      });
+
+    this.homey.flow
+      .getActionCard('restore_cooling_release_temperature')
+      .registerRunListener(async (args) => {
+        return args.device.restoreCoolingReleaseTemperature();
+      });
+
+    this.homey.flow
+      .getActionCard('set_heating_curve_correction')
+      .registerRunListener(async (args) => {
+        return args.device.setHeatingCurveCorrection(args.correction);
+      });
+
+    this.homey.flow
+      .getActionCard('restore_heating_curve_correction')
+      .registerRunListener(async (args) => {
+        return args.device.restoreHeatingCurveCorrection();
+      });
+
+    this.homey.flow
+      .getConditionCard('operation_mode_is')
+      .registerRunListener(async (args) => {
+        return args.device.getCapabilityValue('luxtronik_operationmode') === args.mode;
+      });
   }
 
 }
